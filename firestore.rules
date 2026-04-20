@@ -1,11 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each authenticated user can read and write only their own profile.
-    match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow delete: if false;
+
+    // --- stands ---
+    // Lectura pública (el dashboard y el formulario de voto son anónimos).
+    // Escritura solo para administradores autenticados con custom claim.
+    match /stands/{standId} {
+      allow read: if true;
+      allow create, update, delete:
+        if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // --- votos ---
+    // Un voto es creado desde el formulario móvil. Validamos forma mínima.
+    // No se permite edición ni borrado desde el cliente.
+    match /votos/{voteId} {
+      allow read: if true;
+      allow create: if
+        request.resource.data.keys().hasAll(['stand','emoji','correo','createdAt'])
+        && request.resource.data.emoji in ['bueno','regular','malo']
+        && request.resource.data.correo is string
+        && request.resource.data.correo.size() <= 254
+        && (!('texto' in request.resource.data) ||
+            (request.resource.data.texto is string
+             && request.resource.data.texto.size() <= 500))
+        && (!('compra' in request.resource.data) ||
+            request.resource.data.compra is bool);
+      allow update, delete:
+        if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // --- pasaportes ---
+    // Un pasaporte se identifica por correo (documento = correo en minúsculas).
+    // Cualquiera puede leer su propio pasaporte; solo lectura pública del conteo en dashboard.
+    match /pasaportes/{correo} {
+      allow read: if true;
+      allow create, update: if
+        request.resource.data.correo == correo
+        && request.resource.data.keys().hasAll(['correo','visitados'])
+        && request.resource.data.visitados is list;
+      allow delete:
+        if request.auth != null && request.auth.token.admin == true;
     }
   }
 }

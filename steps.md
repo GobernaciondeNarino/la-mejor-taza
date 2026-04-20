@@ -1,62 +1,46 @@
 # Configuración de Firebase — La Mejor Taza
 
-Guía paso a paso para conectar esta aplicación web al proyecto Firebase
+Guía para conectar el prototipo
+[`La Mejor Taza.html`](./La%20Mejor%20Taza.html) al proyecto Firebase
 [`la-mejor-taza`](https://console.firebase.google.com/project/la-mejor-taza/overview?hl=es-419).
 
-> Requisitos previos: una cuenta de Google con acceso al proyecto y
-> [Node.js 18+](https://nodejs.org/) para instalar la CLI de Firebase.
+> El prototipo usa hoy datos demo en `data/stands.js` (`window.STANDS_DATA`,
+> `window.COMENTARIOS_DEMO`, `window.PASAPORTE_DEMO`). Estos pasos documentan
+> cómo reemplazarlos por Firestore en producción, conservando la UI tal cual.
 
----
-
-## 1. Registrar la aplicación web en Firebase
+## 1. Registrar la app web
 
 1. Abre la [consola de Firebase](https://console.firebase.google.com/project/la-mejor-taza/overview?hl=es-419).
-2. En la pestaña **General** del proyecto, desplázate hasta **Tus apps**.
-3. Haz clic en el icono **`</>`** (Web) para agregar una app.
-4. Ingresa el apodo `La Mejor Taza Web` y **registra la app**.
-5. Firebase mostrará un objeto `firebaseConfig` con las llaves del proyecto.
-   Cópialas — las usarás en el siguiente paso.
+2. En **General → Tus apps**, haz clic en **`</>`** (Web).
+3. Apodo: `La Mejor Taza Web`. Registra y copia el objeto `firebaseConfig`.
 
-## 2. Colocar las credenciales en `firebase-config.js`
+## 2. Activar Authentication
 
-Abre `firebase-config.js` en la raíz del proyecto y reemplaza los valores
-`YOUR_*` con los del paso anterior. Ejemplo:
+- **Build → Authentication → Get started**.
+- Habilita **Email/Password** (para el login del administrador).
+- Habilita **Anonymous** (para votos del usuario móvil sin fricción).
+- En **Settings → Authorized domains**, agrega el dominio donde publicarás
+  (p. ej. `la-mejor-taza.web.app` y cualquier dominio personalizado).
 
-```js
-export const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "la-mejor-taza.firebaseapp.com",
-  projectId: "la-mejor-taza",
-  storageBucket: "la-mejor-taza.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abc123",
-};
+Asignar rol de administrador por custom claim (desde Cloud Functions o
+Cloud Shell):
+
+```bash
+firebase functions:shell
+> admin.auth().setCustomUserClaims("<uid>", { admin: true })
 ```
 
-> Las llaves del SDK web son públicas por diseño. La seguridad real se aplica
-> mediante Authentication, reglas de Firestore y dominios autorizados.
+Las reglas de Firestore exigen `request.auth.token.admin == true` para
+escribir en `stands` y borrar votos.
 
-## 3. Activar Authentication (correo y contraseña)
+## 3. Crear Cloud Firestore
 
-1. En la consola, ve a **Build → Authentication → Get started**.
-2. En la pestaña **Sign-in method**, habilita **Email/Password**.
-3. En **Settings → Authorized domains**, verifica que `localhost` esté
-   presente y agrega el dominio de producción (p. ej.
-   `la-mejor-taza.web.app` o el dominio personalizado de la Gobernación).
+- **Build → Firestore Database → Create database**.
+- Modo **Production** · región `southamerica-east1` (cercana a Colombia).
 
-## 4. Crear la base de datos Cloud Firestore
+## 4. Publicar las reglas
 
-1. Ve a **Build → Firestore Database → Create database**.
-2. Elige **Production mode** (las reglas se cargarán en el siguiente paso).
-3. Selecciona una región cercana (recomendado `southamerica-east1` para
-   usuarios en Colombia).
-
-## 5. Cargar las reglas de seguridad
-
-El repositorio incluye `firestore.rules`: cada usuario autenticado solo puede
-leer y escribir su propio documento `users/{uid}`.
-
-Con la CLI de Firebase:
+El repo incluye `firestore.rules` alineado con el esquema del prototipo.
 
 ```bash
 npm install -g firebase-tools
@@ -65,65 +49,158 @@ firebase use la-mejor-taza
 firebase deploy --only firestore:rules
 ```
 
-O cópialas manualmente en **Firestore → Rules** desde la consola.
+## 5. Esquema de datos
 
-## 6. Estructura de datos en Firestore
+Tres colecciones (nombres elegidos en el chat de diseño):
 
-La app crea y mantiene una colección `users` con documentos identificados
-por el `uid` de Authentication. Cada documento sigue esta forma:
+### `stands/{standId}`
+Los registra el administrador. Lectura pública.
 
 ```jsonc
-// users/{uid}
 {
-  "fullName": "Juan Pérez",
-  "documentId": "1085000000",
-  "email": "juan@example.com",
-  "phone": "+57 300 000 0000",
-  "municipality": "PASTO",     // opcional
-  "gender": "masculino",        // opcional
-  "ethnicity": "indigena",      // opcional
-  "age": 34,                    // opcional
-  "stamps": [],                 // sellos del pasaporte
-  "termsAcceptedAt": "<timestamp>",
+  "id": "st-08",
+  "nombre": "Doña Lucía",
+  "municipio": "Chachagüí",
+  "region": "Centro",
+  "direccion": "Vía aeropuerto, Chachagüí",
+  "correo": "donalucia@correo.co",
+  "descripcion": "Café de finca única. Bourbon rosado, edición limitada.",
+  "coords": { "x": 0.52, "y": 0.46 },
+  "color": "oklch(0.55 0.12 20)",
+  "logoUrl": "https://…",   // opcional, Firebase Storage
   "createdAt": "<timestamp>",
   "updatedAt": "<timestamp>"
 }
 ```
 
-Los campos **municipality**, **gender**, **ethnicity** y **age** son opcionales
-y el usuario puede actualizarlos en cualquier momento desde **Mi Perfil**.
+Los agregados de votos (`votos.bueno/regular/malo`) se mantienen con
+Cloud Functions que escuchan la creación en `votos/`.
 
-## 7. Ejecutar la app localmente
+### `votos/{autoId}`
+Lo crea el formulario móvil al escanear el QR. Escritura pública con
+validación en reglas.
+
+```jsonc
+{
+  "stand": "st-08",
+  "emoji": "bueno",          // "bueno" | "regular" | "malo"
+  "correo": "mf***@gmail.com",
+  "compra": true,
+  "texto": "Comentario opcional (≤ 500 chars)",
+  "createdAt": "<serverTimestamp>"
+}
+```
+
+### `pasaportes/{correo}`
+Documento por correo (en minúsculas) con los stands visitados. Se
+actualiza al mismo tiempo que se crea el voto.
+
+```jsonc
+{
+  "correo": "maria@gmail.com",
+  "nombre": "María Fernanda",
+  "inicio": "2026-04-14",
+  "visitados": ["st-01", "st-02", "st-06", "st-08"]
+}
+```
+
+## 6. Cablear la UI al Firestore real
+
+1. Crea `firebase-config.js` en la raíz con el objeto del paso 1:
+
+   ```js
+   // firebase-config.js
+   export const firebaseConfig = {
+     apiKey: "…",
+     authDomain: "la-mejor-taza.firebaseapp.com",
+     projectId: "la-mejor-taza",
+     storageBucket: "la-mejor-taza.appspot.com",
+     messagingSenderId: "…",
+     appId: "…"
+   };
+   ```
+
+2. En `La Mejor Taza.html`, reemplaza la carga de `data/stands.js` por un
+   módulo que lea de Firestore en tiempo real y vuelque en los mismos
+   globals (`window.STANDS_DATA`, `window.COMENTARIOS_DEMO`) antes de
+   montar React. Un patrón de cableado:
+
+   ```html
+   <script type="module">
+     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+     import { getFirestore, collection, onSnapshot, orderBy, limit, query }
+       from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+     import { firebaseConfig } from "./firebase-config.js";
+
+     const app = initializeApp(firebaseConfig);
+     const db = getFirestore(app);
+
+     window.STANDS_DATA = [];
+     window.COMENTARIOS_DEMO = [];
+
+     onSnapshot(collection(db, "stands"), snap => {
+       window.STANDS_DATA = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+       window.dispatchEvent(new Event("lmt:data"));
+     });
+
+     onSnapshot(
+       query(collection(db, "votos"), orderBy("createdAt", "desc"), limit(20)),
+       snap => {
+         window.COMENTARIOS_DEMO = snap.docs.map(d => d.data());
+         window.dispatchEvent(new Event("lmt:data"));
+       }
+     );
+   </script>
+   ```
+
+   Luego, en el script de inicialización de React, vuelve a renderizar
+   cuando llegue `lmt:data`.
+
+3. El formulario de voto (`VoteForm` en `components/VoteFlow.jsx`) debe
+   llamar a:
+
+   ```js
+   await addDoc(collection(db, "votos"), {
+     stand: stand.id,
+     emoji: data.emoji,
+     correo: data.correo,
+     compra: data.compra,
+     texto: data.texto,
+     createdAt: serverTimestamp(),
+   });
+   await setDoc(
+     doc(db, "pasaportes", data.correo.toLowerCase()),
+     { correo: data.correo.toLowerCase(),
+       visitados: arrayUnion(stand.id) },
+     { merge: true }
+   );
+   ```
+
+## 7. Correr localmente
 
 ```bash
-# Servidor estático sencillo
+# Servidor estático (Node o Python)
 npx serve .
 # o
 python3 -m http.server 5173
 ```
 
-Abre `http://localhost:5173` (o el puerto que muestre la herramienta) en tu
-navegador. Deberías poder registrarte, iniciar sesión y ver el pasaporte.
+Abre `http://localhost:5173/` (redirige a `La Mejor Taza.html`).
 
-## 8. Publicar en Firebase Hosting (opcional)
+## 8. Publicar en Firebase Hosting
 
 ```bash
-firebase init hosting     # si aún no está inicializado
+firebase init hosting    # si aún no está inicializado
 firebase deploy --only hosting
 ```
 
-El archivo `firebase.json` incluido sirve los archivos estáticos desde la
-raíz del repositorio y reescribe cualquier ruta a `index.html`.
+`firebase.json` ya reescribe `/` → `/La Mejor Taza.html` y `/s/**` →
+`/La Mejor Taza.html` (para las URLs cortas `lamejortaza.co/s/{standId}`
+impresas en los carteles QR).
 
-## 9. Próximos pasos sugeridos
+## 9. Próximos pasos
 
-- Agregar inicio de sesión con Google en **Authentication → Sign-in method**.
-- Crear una colección `stamps` con los stands participantes y una función
-  Cloud Function que agregue sellos al pasaporte al escanear un código.
-- Exportar estadísticas anónimas (municipio, género, etnia, edad) a
-  BigQuery para los reportes de la Gobernación.
-
----
-
-¿Dudas? Revisa la [documentación oficial de Firebase](https://firebase.google.com/docs)
-o el `README` de este repositorio.
+- Cloud Function `onCreate(votos)` que recalcule agregados en `stands`.
+- Cloud Function `onCreate(stands)` que genere el PNG del QR en Storage.
+- Firebase Analytics para medir escaneos y conversión por stand.
+- BigQuery export para reportes de la Gobernación.

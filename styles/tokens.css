@@ -1,0 +1,107 @@
+/* La Mejor Taza — Design tokens */
+:root {
+  /* Paleta base */
+  --paper: oklch(0.97 0.015 75);
+  --paper-2: oklch(0.93 0.025 75);
+  --paper-3: oklch(0.88 0.03 75);
+  --ink: oklch(0.22 0.02 60);
+  --ink-2: oklch(0.4 0.02 60);
+  --ink-3: oklch(0.58 0.02 60);
+  --line: oklch(0.85 0.01 75);
+  --line-2: oklch(0.78 0.015 75);
+
+  /* Acentos */
+  --grano: oklch(0.42 0.09 50);
+  --galeras: oklch(0.55 0.13 30);
+  --cafeto: oklch(0.5 0.08 145);
+
+  /* Estados voto */
+  --good: oklch(0.6 0.14 145);
+  --meh: oklch(0.72 0.12 85);
+  --bad: oklch(0.58 0.18 25);
+
+  /* Tipografía */
+  --font-display: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Radius */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+
+  /* Sombras suaves */
+  --shadow-1: 0 1px 0 oklch(0.85 0.01 75 / 0.6), 0 2px 8px oklch(0.22 0.02 60 / 0.04);
+  --shadow-2: 0 2px 0 oklch(0.85 0.01 75 / 0.4), 0 8px 24px oklch(0.22 0.02 60 / 0.08);
+}
+
+* { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--font-sans); }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font-family: inherit; color: inherit; }
+
+/* Textura sutil de papel */
+.paper-texture {
+  background-image:
+    radial-gradient(oklch(0.22 0.02 60 / 0.025) 1px, transparent 1px),
+    radial-gradient(oklch(0.22 0.02 60 / 0.02) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+}
+
+/* Monospace para metadatos */
+.mono { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Botón base */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px; font-weight: 500;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--ink); color: var(--paper); }
+.btn-primary:hover { background: var(--grano); }
+.btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--paper-2); }
+
+/* Input base */
+.field {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 500; }
+.field input, .field textarea, .field select {
+  border: none;
+  border-bottom: 1px solid var(--line-2);
+  background: transparent;
+  padding: 8px 0;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field input:focus, .field textarea:focus { border-bottom-color: var(--ink); }
+.field textarea { resize: vertical; min-height: 60px; }
+
+/* Divider con estrellita */
+.divider-stamp {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--line-2);
+  font-family: var(--font-display);
+  font-style: italic;
+}
+.divider-stamp::before, .divider-stamp::after {
+  content: ''; flex: 1; height: 1px; background: var(--line);
+}
+
+/* Animaciones */
+@keyframes stamp-land {
+  0% { transform: translate(-50%, -50%) scale(2.5) rotate(var(--stamp-rot, -12deg)); opacity: 0; }
+  60% { transform: translate(-50%, -50%) scale(0.9) rotate(var(--stamp-rot, -12deg)); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(var(--stamp-rot, -12deg)); opacity: 0.88; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

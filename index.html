@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es-419">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>La Mejor Taza — Pasaporte Cafetero de Nariño</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">☕</span>
+      <div>
+        <h1>La Mejor Taza</h1>
+        <p class="tagline">Pasaporte Cafetero de Nariño</p>
+      </div>
+    </div>
+    <nav id="nav" class="nav hidden">
+      <button data-route="pasaporte" class="nav-btn">Mi Pasaporte</button>
+      <button data-route="perfil" class="nav-btn">Mi Perfil</button>
+      <button id="logoutBtn" class="nav-btn nav-btn--ghost">Cerrar sesión</button>
+    </nav>
+  </header>
+
+  <main id="app">
+    <!-- Login / Register view -->
+    <section id="view-auth" class="view">
+      <div class="card auth-card">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="login" role="tab">Iniciar sesión</button>
+          <button class="tab" data-tab="register" role="tab">Registrarme</button>
+        </div>
+
+        <form id="loginForm" class="form" novalidate>
+          <label>Correo electrónico
+            <input type="email" name="email" required autocomplete="email" />
+          </label>
+          <label>Contraseña
+            <input type="password" name="password" required minlength="6" autocomplete="current-password" />
+          </label>
+          <button type="submit" class="btn btn--primary">Entrar</button>
+          <p class="form-msg" data-for="loginForm"></p>
+        </form>
+
+        <form id="registerForm" class="form hidden" novalidate>
+          <label>Nombre completo
+            <input type="text" name="fullName" required autocomplete="name" />
+          </label>
+          <label>Documento de identidad
+            <input type="text" name="documentId" required inputmode="numeric" pattern="[0-9]{5,15}" />
+          </label>
+          <label>Correo electrónico
+            <input type="email" name="email" required autocomplete="email" />
+          </label>
+          <label>Teléfono
+            <input type="tel" name="phone" required autocomplete="tel" pattern="[0-9+\-\s]{7,20}" />
+          </label>
+          <label>Contraseña
+            <input type="password" name="password" required minlength="6" autocomplete="new-password" />
+          </label>
+          <label class="check">
+            <input type="checkbox" name="terms" required />
+            <span>Acepto el tratamiento de datos personales conforme a la Ley 1581 de 2012.</span>
+          </label>
+          <button type="submit" class="btn btn--primary">Crear cuenta</button>
+          <p class="form-msg" data-for="registerForm"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Passport view -->
+    <section id="view-pasaporte" class="view hidden">
+      <article class="passport" id="passportCard">
+        <div class="passport__header">
+          <span class="passport__seal">☕</span>
+          <div>
+            <h2>Pasaporte Cafetero</h2>
+            <p>La Mejor Taza — Nariño</p>
+          </div>
+          <span class="passport__id" id="passportId">#000000</span>
+        </div>
+
+        <div class="passport__body">
+          <div class="passport__photo" id="passportPhoto" aria-hidden="true"></div>
+          <dl class="passport__fields">
+            <dt>Nombre</dt><dd id="pName">—</dd>
+            <dt>Documento</dt><dd id="pDocument">—</dd>
+            <dt>Municipio</dt><dd id="pMunicipio">—</dd>
+            <dt>Registrado</dt><dd id="pCreated">—</dd>
+          </dl>
+        </div>
+
+        <div class="passport__stamps">
+          <h3>Sellos</h3>
+          <div id="stampsGrid" class="stamps-grid">
+            <p class="muted">Aún no tienes sellos. Visita los stands para obtenerlos.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Profile view -->
+    <section id="view-perfil" class="view hidden">
+      <div class="card">
+        <h2>Mi perfil</h2>
+        <p class="muted">Actualiza tus datos. Las categorías son opcionales y se usan solo con fines estadísticos.</p>
+
+        <form id="profileForm" class="form">
+          <fieldset>
+            <legend>Datos básicos</legend>
+            <label>Nombre completo
+              <input type="text" name="fullName" required />
+            </label>
+            <label>Documento de identidad
+              <input type="text" name="documentId" required />
+            </label>
+            <label>Teléfono
+              <input type="tel" name="phone" required />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Categorizaciones (opcional)</legend>
+            <label>Municipio
+              <select name="municipality">
+                <option value="">Prefiero no responder</option>
+              </select>
+            </label>
+            <label>Género
+              <select name="gender">
+                <option value="">Prefiero no responder</option>
+                <option value="femenino">Femenino</option>
+                <option value="masculino">Masculino</option>
+                <option value="no_binario">No binario</option>
+                <option value="otro">Otro</option>
+              </select>
+            </label>
+            <label>Etnia
+              <select name="ethnicity">
+                <option value="">Prefiero no responder</option>
+                <option value="indigena">Indígena</option>
+                <option value="afrodescendiente">Afrodescendiente</option>
+                <option value="raizal">Raizal</option>
+                <option value="palenquero">Palenquero</option>
+                <option value="rom">Rom / Gitano</option>
+                <option value="mestizo">Mestizo</option>
+                <option value="ninguno">Ninguno</option>
+              </select>
+            </label>
+            <label>Edad
+              <input type="number" name="age" min="13" max="120" />
+            </label>
+          </fieldset>
+
+          <button type="submit" class="btn btn--primary">Guardar cambios</button>
+          <p class="form-msg" data-for="profileForm"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© <span id="year"></span> Gobernación de Nariño · La Mejor Taza</small>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

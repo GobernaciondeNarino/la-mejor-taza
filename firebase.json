@@ -10,7 +10,8 @@
       "municipios.geojson"
     ],
     "rewrites": [
-      { "source": "**", "destination": "/index.html" }
+      { "source": "/", "destination": "/La Mejor Taza.html" },
+      { "source": "/s/**", "destination": "/La Mejor Taza.html" }
     ]
   },
   "firestore": {

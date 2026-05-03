@@ -43,7 +43,36 @@ const AdminShell = ({ active, setActive, children }) => {
   );
 };
 
-const LoginAdmin = ({ onLogin }) => (
+const LoginAdmin = ({ onLogin }) => {
+  const [email, setEmail] = React.useState("admin@lamejortaza.co");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  const handleLogin = async () => {
+    setError("");
+    if (!window.LMTSecurity || !window.LMTSecurity.isEmail(email)) {
+      setError("Correo inválido");
+      return;
+    }
+    if (!password || password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (window.LMTFirebase && window.LMTFirebase.enabled) {
+        await window.LMTFirebase.signInAdmin(email, password);
+      }
+      onLogin();
+    } catch (e) {
+      setError("No fue posible iniciar sesión. Verifica las credenciales.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
   <div style={{
     minHeight: "100%", display: "grid", gridTemplateColumns: "1fr 1fr",
     background: "var(--paper)",
@@ -87,28 +116,35 @@ const LoginAdmin = ({ onLogin }) => (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="field">
           <label>Correo institucional</label>
-          <input type="email" defaultValue="admin@lamejortaza.co"/>
+          <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254}/>
         </div>
         <div className="field">
           <label>Contraseña</label>
-          <input type="password" defaultValue="••••••••••"/>
+          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={128} onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}/>
         </div>
+        {error && (
+          <div role="alert" style={{ fontSize: 13, color: "var(--bad)", marginTop: -8 }}>{error}</div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-2)" }}>
             <input type="checkbox" defaultChecked/> Recordarme
           </label>
           <a href="#" style={{ fontSize: 13, color: "var(--ink-2)" }}>¿Olvidó su contraseña?</a>
         </div>
-        <button className="btn btn-primary" onClick={onLogin} style={{ marginTop: 16, justifyContent: "center", padding: "14px" }}>
-          Entrar al panel →
+        <button className="btn btn-primary" onClick={handleLogin} disabled={busy} style={{ marginTop: 16, justifyContent: "center", padding: "14px", opacity: busy ? 0.6 : 1 }}>
+          {busy ? "Validando…" : "Entrar al panel →"}
         </button>
         <div className="mono" style={{ textAlign: "center", marginTop: 20, color: "var(--ink-3)" }}>
           Acceso controlado · v 1.0
+          {window.LMTFirebase && window.LMTFirebase.enabled
+            ? <span> · Firebase activo</span>
+            : <span> · Modo demo (sin Firebase)</span>}
         </div>
       </div>
     </div>
   </div>
-);
+  );
+};
 
 const StandsList = ({ stands, onNuevo, onSelect, selected }) => {
   const sorted = [...stands].sort((a, b) => calcScore(b.votos) - calcScore(a.votos));

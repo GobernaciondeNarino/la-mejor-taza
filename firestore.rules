@@ -2,45 +2,86 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helpers ---------------------------------------------------------------
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    function isAuthed() {
+      return request.auth != null;
+    }
+    function emailLooksValid(s) {
+      return s is string
+        && s.size() >= 5
+        && s.size() <= 254
+        && s.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+    }
+    function standIdValid(s) {
+      return s is string && s.matches('^[a-z0-9\\-]{2,32}$');
+    }
+
     // --- stands ---
     // Lectura pública (el dashboard y el formulario de voto son anónimos).
     // Escritura solo para administradores autenticados con custom claim.
     match /stands/{standId} {
       allow read: if true;
-      allow create, update, delete:
-        if request.auth != null && request.auth.token.admin == true;
+
+      allow create: if isAdmin()
+        && standIdValid(standId)
+        && request.resource.data.keys().hasAll(['nombre', 'municipio'])
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() <= 80
+        && request.resource.data.municipio is string
+        && request.resource.data.municipio.size() <= 80;
+
+      allow update: if isAdmin()
+        && (!('nombre' in request.resource.data) || request.resource.data.nombre.size() <= 80);
+
+      allow delete: if isAdmin();
     }
 
     // --- votos ---
-    // Un voto es creado desde el formulario móvil. Validamos forma mínima.
-    // No se permite edición ni borrado desde el cliente.
+    // Un voto es creado desde el formulario móvil por usuarios autenticados
+    // (anónimos basta). No se permite edición ni borrado desde el cliente.
     match /votos/{voteId} {
       allow read: if true;
-      allow create: if
-        request.resource.data.keys().hasAll(['stand','emoji','correo','createdAt'])
-        && request.resource.data.emoji in ['bueno','regular','malo']
-        && request.resource.data.correo is string
-        && request.resource.data.correo.size() <= 254
+
+      allow create: if isAuthed()
+        && request.resource.data.keys().hasAll(['stand', 'emoji', 'correo', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['stand', 'emoji', 'correo', 'compra', 'texto', 'createdAt'])
+        && standIdValid(request.resource.data.stand)
+        && request.resource.data.emoji in ['bueno', 'regular', 'malo']
+        && emailLooksValid(request.resource.data.correo)
+        && request.resource.data.createdAt == request.time
         && (!('texto' in request.resource.data) ||
             (request.resource.data.texto is string
              && request.resource.data.texto.size() <= 500))
         && (!('compra' in request.resource.data) ||
             request.resource.data.compra is bool);
-      allow update, delete:
-        if request.auth != null && request.auth.token.admin == true;
+
+      allow update, delete: if isAdmin();
     }
 
     // --- pasaportes ---
-    // Un pasaporte se identifica por correo (documento = correo en minúsculas).
-    // Cualquiera puede leer su propio pasaporte; solo lectura pública del conteo en dashboard.
+    // Documento por correo (en minúsculas) con stands visitados.
+    // Cualquiera puede crear/actualizar el pasaporte de su correo, pero no
+    // sobrescribir a otro: el id del documento debe coincidir con el campo correo.
     match /pasaportes/{correo} {
       allow read: if true;
-      allow create, update: if
-        request.resource.data.correo == correo
-        && request.resource.data.keys().hasAll(['correo','visitados'])
-        && request.resource.data.visitados is list;
-      allow delete:
-        if request.auth != null && request.auth.token.admin == true;
+
+      allow create, update: if isAuthed()
+        && request.resource.data.correo == correo
+        && emailLooksValid(correo)
+        && request.resource.data.keys().hasAll(['correo', 'visitados'])
+        && request.resource.data.keys().hasOnly(['correo', 'nombre', 'inicio', 'visitados'])
+        && request.resource.data.visitados is list
+        && request.resource.data.visitados.size() <= 100;
+
+      allow delete: if isAdmin();
+    }
+
+    // Cierre por defecto
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

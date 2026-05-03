@@ -31,7 +31,11 @@ const PublicDashboard = ({ stands, comentarios, onDetail }) => {
       </header>
 
       {/* Hero */}
-      <section style={{ padding: "48px 48px 32px", display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 48, alignItems: "flex-end" }}>
+      <section className="lmt-three-wrap" ref={(el) => {
+        if (el && window.LMTThree && !el.dataset.threeMounted) {
+          window.LMTThree.mount(el);
+        }
+      }} data-three-bg style={{ padding: "48px 48px 32px", display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 48, alignItems: "flex-end", position: "relative", overflow: "hidden", minHeight: 360 }}>
         <div>
           <div className="mono">Ranking público</div>
           <h1 style={{

@@ -3,7 +3,45 @@
 const VoteForm = ({ stand, onComplete }) => {
   const [step, setStep] = React.useState(0); // 0: correo, 1: emoji, 2: detalles, 3: confirmando
   const [data, setData] = React.useState({ correo: "", emoji: null, compra: null, texto: "" });
+  const [submitError, setSubmitError] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
   const update = (k, v) => setData(d => ({ ...d, [k]: v }));
+  const sec = window.LMTSecurity;
+  const correoOk = sec ? sec.isEmail(data.correo.trim()) : data.correo.includes("@");
+
+  const handleSubmit = async () => {
+    setSubmitError("");
+    setSubmitting(true);
+    try {
+      if (window.LMTFirebase && window.LMTFirebase.enabled) {
+        await window.LMTFirebase.submitVote({
+          stand: stand.id,
+          emoji: data.emoji,
+          correo: data.correo,
+          compra: data.compra,
+          texto: data.texto,
+        });
+      } else if (sec) {
+        // Modo demo: validamos igual aunque no haya backend.
+        sec.buildVotePayload({
+          stand: stand.id,
+          emoji: data.emoji,
+          correo: data.correo,
+          compra: data.compra,
+          texto: data.texto,
+        });
+      }
+      onComplete(data);
+    } catch (e) {
+      const msg = String(e && e.message || e);
+      if (msg.includes("rate_limited")) setSubmitError("Ya votaste por este stand hace poco. Intenta más tarde.");
+      else if (msg.includes("correo_invalido")) setSubmitError("El correo no es válido.");
+      else if (msg.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");
+      else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const emojis = [
     { id: "malo", label: "Malo", emoji: "😞", color: "var(--bad)" },
@@ -42,12 +80,12 @@ const VoteForm = ({ stand, onComplete }) => {
           </p>
           <div className="field" style={{ marginTop: 28 }}>
             <label>Tu correo</label>
-            <input type="email" placeholder="nombre@correo.co" value={data.correo} onChange={e => update("correo", e.target.value)}/>
+            <input type="email" autoComplete="email" inputMode="email" maxLength={254} placeholder="nombre@correo.co" value={data.correo} onChange={e => update("correo", e.target.value)}/>
           </div>
           <div style={{ marginTop: "auto", paddingTop: 24 }}>
-            <button className="btn btn-primary" onClick={() => setStep(1)} disabled={!data.correo.includes("@")} style={{
+            <button className="btn btn-primary" onClick={() => setStep(1)} disabled={!correoOk} style={{
               width: "100%", justifyContent: "center", padding: "14px",
-              opacity: data.correo.includes("@") ? 1 : 0.4,
+              opacity: correoOk ? 1 : 0.4,
             }}>
               Continuar →
             </button>
@@ -110,19 +148,26 @@ const VoteForm = ({ stand, onComplete }) => {
             ))}
           </div>
           <div className="field" style={{ marginTop: 24 }}>
-            <label>Comentario (opcional)</label>
+            <label>Comentario (opcional, máx. 500)</label>
             <textarea
               rows={4}
               value={data.texto}
+              maxLength={500}
               onChange={e => update("texto", e.target.value)}
               placeholder="¿Qué destacarías del stand?"
               style={{ border: "1px solid var(--line-2)", borderRadius: "var(--r-md)", padding: 12 }}
             />
+            <div className="mono" style={{ alignSelf: "flex-end", color: "var(--ink-3)" }}>{data.texto.length}/500</div>
           </div>
+          {submitError && (
+            <div role="alert" style={{ marginTop: 12, padding: "10px 12px", border: "1px solid var(--bad)", color: "var(--bad)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
+              {submitError}
+            </div>
+          )}
           <div style={{ marginTop: "auto", paddingTop: 24, display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => setStep(1)}>←</button>
-            <button className="btn btn-primary" onClick={() => onComplete(data)} style={{ flex: 1, justifyContent: "center", padding: "14px" }}>
-              Sellar pasaporte →
+            <button className="btn btn-ghost" onClick={() => setStep(1)} disabled={submitting}>←</button>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting} style={{ flex: 1, justifyContent: "center", padding: "14px", opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? "Enviando…" : "Sellar pasaporte →"}
             </button>
           </div>
         </div>

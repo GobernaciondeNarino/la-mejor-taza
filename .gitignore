@@ -1,0 +1,19 @@
+# Configuración Firebase real (no commitear claves del proyecto)
+firebase-config.js
+
+# Artefactos Firebase / Node
+.firebase/
+.firebaserc.local
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# OS / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

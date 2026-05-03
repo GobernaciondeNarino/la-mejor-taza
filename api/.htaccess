@@ -1,0 +1,30 @@
+# /api/.htaccess — front controller + sin listing
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /api/
+  # Bloquea acceso directo a config y librerías
+  RewriteRule ^(config|config\.example|lib|routes)(\.php)?(/.*)?$ - [F,L]
+  # Front controller: todo a index.php (preservando query string)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# Defensa adicional si mod_rewrite no está disponible
+<FilesMatch "\.(sql|md|log|ini|env|sample|example|bak|backup|swp|swo|tmp)$">
+  Require all denied
+</FilesMatch>
+
+<Files "config.php">
+  Require all denied
+</Files>
+
+# Tipo correcto y sin sniffing
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+</IfModule>

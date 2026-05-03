@@ -1,15 +1,22 @@
-# Configuración Firebase real (no commitear claves del proyecto)
-firebase-config.js
+# Configuración real (no commitear secretos)
+api/config.php
 
-# Artefactos Firebase / Node
-.firebase/
-.firebaserc.local
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
+# Bases de datos locales
+db/*.sqlite
+db/*.sqlite-journal
+db/*.sqlite-wal
+db/*.sqlite-shm
+db/*.db
+
+# Composer / Node (si en el futuro se añaden)
+vendor/
 node_modules/
-npm-debug.log
-yarn-error.log
+composer.lock
+
+# Logs
+*.log
+api-debug.log
+php-error.log
 
 # OS / editores
 .DS_Store

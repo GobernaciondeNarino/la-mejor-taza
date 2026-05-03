@@ -61,12 +61,14 @@ const LoginAdmin = ({ onLogin }) => {
     }
     setBusy(true);
     try {
-      if (window.LMTFirebase && window.LMTFirebase.enabled) {
-        await window.LMTFirebase.signInAdmin(email, password);
+      if (window.LMTApi && window.LMTApi.enabled) {
+        await window.LMTApi.signInAdmin(email, password);
       }
       onLogin();
     } catch (e) {
-      setError("No fue posible iniciar sesión. Verifica las credenciales.");
+      const code = e && (e.code || e.message);
+      if (code === "rate_limited") setError("Demasiados intentos. Espera unos minutos.");
+      else setError("No fue posible iniciar sesión. Verifica las credenciales.");
     } finally {
       setBusy(false);
     }
@@ -136,9 +138,9 @@ const LoginAdmin = ({ onLogin }) => {
         </button>
         <div className="mono" style={{ textAlign: "center", marginTop: 20, color: "var(--ink-3)" }}>
           Acceso controlado · v 1.0
-          {window.LMTFirebase && window.LMTFirebase.enabled
-            ? <span> · Firebase activo</span>
-            : <span> · Modo demo (sin Firebase)</span>}
+          {window.LMTApi && window.LMTApi.enabled
+            ? <span> · API conectada</span>
+            : <span> · Modo demo (sin backend)</span>}
         </div>
       </div>
     </div>

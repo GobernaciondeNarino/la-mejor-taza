@@ -13,8 +13,8 @@ const VoteForm = ({ stand, onComplete }) => {
     setSubmitError("");
     setSubmitting(true);
     try {
-      if (window.LMTFirebase && window.LMTFirebase.enabled) {
-        await window.LMTFirebase.submitVote({
+      if (window.LMTApi && window.LMTApi.enabled) {
+        await window.LMTApi.submitVote({
           stand: stand.id,
           emoji: data.emoji,
           correo: data.correo,
@@ -33,10 +33,12 @@ const VoteForm = ({ stand, onComplete }) => {
       }
       onComplete(data);
     } catch (e) {
-      const msg = String(e && e.message || e);
-      if (msg.includes("rate_limited")) setSubmitError("Ya votaste por este stand hace poco. Intenta más tarde.");
-      else if (msg.includes("correo_invalido")) setSubmitError("El correo no es válido.");
-      else if (msg.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");
+      const code = String((e && (e.code || e.message)) || e);
+      if (code.includes("rate_limited")) setSubmitError("Ya votaste por este stand hace poco. Intenta más tarde.");
+      else if (code.includes("ya_votaste")) setSubmitError("Ya registraste un voto para este stand con ese correo.");
+      else if (code.includes("correo_invalido")) setSubmitError("El correo no es válido.");
+      else if (code.includes("emoji_invalido")) setSubmitError("Selecciona una calificación.");
+      else if (code.includes("stand_no_existe")) setSubmitError("Este stand ya no está disponible.");
       else setSubmitError("No fue posible registrar tu voto. Intenta de nuevo.");
     } finally {
       setSubmitting(false);

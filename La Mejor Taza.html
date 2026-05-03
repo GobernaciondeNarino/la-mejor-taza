@@ -7,11 +7,11 @@
 <meta name="color-scheme" content="light"/>
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com data:;
-  img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com;
-  connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;
+  img-src 'self' data: blob:;
+  connect-src 'self';
   frame-ancestors 'self';
   base-uri 'self';
   form-action 'self';
@@ -47,8 +47,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js" crossorigin="anonymous"></script>
 <script src="js/three-background.js"></script>
 
-<!-- Wiring Firebase (módulo ESM, opcional). Si no hay firebase-config.js, queda en modo demo. -->
-<script type="module" src="js/firebase.js"></script>
+<!-- Cliente del backend PHP. Si /api no responde, la UI mantiene los datos demo. -->
+<script src="js/api.js"></script>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -237,8 +237,8 @@ const App = () => {
         ))}
         <div style={{ marginTop: "auto", color: "oklch(0.55 0.01 60)", fontSize: 10, lineHeight: 1.5 }}>
           <div className="mono" style={{ color: "oklch(0.7 0.01 60)", fontSize: 9, marginBottom: 6 }}>Datos</div>
-          JSON local · {STANDS_DATA.length} stands<br/>
-          En producción: Firebase/Firestore
+          {STANDS_DATA.length} stands cargados<br/>
+          Backend: PHP · MySQL/SQLite
         </div>
       </nav>
 

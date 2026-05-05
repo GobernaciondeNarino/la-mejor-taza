@@ -1,4 +1,5 @@
 <?php
+defined('LMT_GUARD') || exit('forbidden');
 use LMT\Db;
 use LMT\Response;
 use LMT\Security;

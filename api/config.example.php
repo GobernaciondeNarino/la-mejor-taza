@@ -1,4 +1,5 @@
 <?php
+defined('LMT_GUARD') || exit('forbidden');
 // api/config.example.php
 // Copia a `config.php` y rellena los valores. `config.php` está en .gitignore.
 

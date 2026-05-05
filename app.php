@@ -4,6 +4,7 @@
 // (https://lamejortaza.co/) o en un subdirectorio (https://host/lamejortaza/).
 
 declare(strict_types=1);
+if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 
 $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
 $scriptDir = rtrim($scriptDir, '/');
@@ -47,7 +48,9 @@ if ($secure) header('Strict-Transport-Security: max-age=31536000; includeSubDoma
 
 $bootstrap = [
     'base'    => $base,
-    'apiBase' => $base . '/api',
+    // Apuntamos directo al front controller PHP. Funciona con o sin
+    // mod_rewrite — el cliente añade `?path=...` con la ruta deseada.
+    'apiBase' => $base . '/api/index.php',
     'siteName'=> 'La Mejor Taza',
 ];
 ?>
@@ -61,7 +64,7 @@ $bootstrap = [
 <base href="<?= htmlspecialchars($baseHref, ENT_QUOTES) ?>"/>
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com data:;
   img-src 'self' data: blob:;
@@ -107,12 +110,12 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <!-- Utilidades de seguridad -->
 <script src="js/security.js"></script>
 
-<!-- Three.js (animaciones) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js" crossorigin="anonymous"></script>
+<!-- Three.js (animaciones) — auto-hospedado para no depender de CDNs externas. -->
+<script src="js/vendor/three.min.js"></script>
 <script src="js/three-background.js"></script>
 
-<!-- Generador de QR (Kazuhiko Arase, sin dependencias) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" crossorigin="anonymous"></script>
+<!-- Generador de QR (Kazuhiko Arase, sin dependencias) — auto-hospedado. -->
+<script src="js/vendor/qrcode.min.js"></script>
 
 <!-- Cliente del backend PHP + router del SPA -->
 <script src="js/router.js"></script>

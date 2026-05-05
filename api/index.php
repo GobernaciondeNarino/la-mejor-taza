@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+// Marca de "entrada legítima" — todos los archivos sensibles (config, lib,
+// routes) chequean esta constante y abortan si están siendo accedidos
+// directamente. Defensa en profundidad por si .htaccess es ignorado.
+if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
+
 // Front controller — no exponer detalles de errores al cliente.
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
@@ -43,23 +48,32 @@ if (!\LMT\RateLimit::hit('global', \LMT\RateLimit::ipHash())) {
 // CSRF/Origin para métodos no seguros
 Security::requireCsrfAndOrigin();
 
-// Calcular path interno de forma robusta (funciona en root y en subdirectorios
-// como /lamejortaza/api/...). Usamos SCRIPT_NAME que apunta a api/index.php.
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
-$scriptDir = '/' . trim($scriptDir, '/'); // p.ej. "/api" o "/lamejortaza/api"
-$path = $uri;
-if ($scriptDir !== '/' && strpos($path, $scriptDir) === 0) {
-    $path = substr($path, strlen($scriptDir));
-} elseif (strpos($path, '/api') !== false) {
-    // fallback: cortar a partir del último "/api/"
-    $pos = strrpos($path, '/api/');
-    if ($pos === false) {
-        $pos = (substr($path, -4) === '/api') ? strlen($path) - 4 : false;
+// Calcular path interno con múltiples estrategias (en orden de preferencia):
+//   1. ?path=...           — el cliente lo manda explícito (no requiere mod_rewrite).
+//   2. PATH_INFO            — Apache lo expone si visitan /api/index.php/auth/me.
+//   3. REQUEST_URI parsing  — funciona cuando hay rewrites activos.
+$path = '/';
+if (isset($_GET['path']) && is_string($_GET['path']) && $_GET['path'] !== '') {
+    $path = '/' . trim($_GET['path'], '/');
+} elseif (!empty($_SERVER['PATH_INFO'])) {
+    $path = '/' . trim((string) $_SERVER['PATH_INFO'], '/');
+} else {
+    $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
+    $scriptDir = '/' . trim($scriptDir, '/');
+    $stripped = $uri;
+    if ($scriptDir !== '/' && strpos($stripped, $scriptDir) === 0) {
+        $stripped = substr($stripped, strlen($scriptDir));
+    } elseif (($pos = strrpos($stripped, '/api/')) !== false) {
+        $stripped = substr($stripped, $pos + 4);
+    } elseif (substr($stripped, -4) === '/api') {
+        $stripped = '';
     }
-    if ($pos !== false) $path = substr($path, $pos + 4);
+    $stripped = '/' . trim((string) $stripped, '/');
+    if ($stripped !== '/' && $stripped !== '/index.php') {
+        $path = $stripped;
+    }
 }
-$path = '/' . trim((string)$path, '/');
 
 $router = new Router();
 require __DIR__ . '/routes/health.php';

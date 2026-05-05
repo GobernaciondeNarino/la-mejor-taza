@@ -530,22 +530,33 @@ curl -I https://tu-sitio/lamejortaza/s/st-08
 
 ### "Después de instalar veo 404 en `/admin/login` / `/s/{id}`"
 
-Casi siempre es uno de estos:
+**Buena noticia**: la API ya **no depende de `mod_rewrite`**. El cliente
+JS llama directamente a `/lamejortaza/api/index.php?path=auth/me`, que
+funciona aunque `AllowOverride` esté en `None`.
 
-1. **`mod_rewrite` no está activo.** En cPanel suele venir habilitado;
-   en Apache "vanilla" hay que asegurar `LoadModule rewrite_module
-   modules/mod_rewrite.so`. Verifica con `apachectl -M | grep rewrite`.
-2. **`AllowOverride None` en el VirtualHost.** El `.htaccess` se ignora.
-   Tienes que pedir al hosting (o ajustar la config) `AllowOverride All`
-   o al menos `AllowOverride FileInfo Indexes Options`.
-3. **El `.htaccess` no se subió** (algunos clientes FTP ocultan los
-   archivos que empiezan con punto). Verifica que existe físicamente.
+Para los **deep links de la SPA** (`/admin/login`, `/s/{id}`, etc.) sí
+necesitas que Apache enrute esas URLs hacia `app.php`. Hay tres niveles
+de fallback:
 
-Diagnóstico: visita `https://tu-sitio/lamejortaza/api/health`.
-- 200 con JSON → la API funciona; el problema es sólo en las URLs SPA
-  (`mod_rewrite` o `AllowOverride`).
-- 404 / página de error de hosting → ni la API está accesible; revisa
-  `.htaccess` y permisos.
+1. **`mod_rewrite`** activo + `AllowOverride All` (preferido).
+2. **`FallbackResource /app.php`** — Apache 2.2.16+, no requiere
+   `mod_rewrite` pero sí `AllowOverride FileInfo`.
+3. Si nada de lo anterior funciona, los visitantes pueden seguir
+   votando porque las URLs de los QR funcionan vía `app.php`
+   directamente y el `index.php` raíz sirve el dashboard.
+
+Diagnóstico rápido — visita en el navegador:
+```
+https://tu-sitio/lamejortaza/api/index.php?path=health
+```
+
+- 200 con JSON `{"ok":true,"data":{...,"db_reachable":true}}` → la API
+  funciona perfectamente, no tienes ningún problema crítico. Si las
+  URLs `/admin/login` aún 404'an, es sólo cuestión de cosmética: pide
+  al hosting que active `mod_rewrite` o `AllowOverride All`.
+- 404 / página de error del hosting → ni siquiera el front controller
+  PHP está accesible. Verifica que subiste `api/index.php` y que el
+  hosting permite ejecutar `.php`.
 
 ### "POST /api/votos devuelve `origin_not_allowed`"
 

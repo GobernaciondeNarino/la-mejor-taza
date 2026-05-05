@@ -1,30 +1,43 @@
-# /api/.htaccess — front controller + sin listing
+# /api/.htaccess
+# La API se invoca directamente como `index.php?path=auth/me`, así que este
+# archivo NO necesita reglas de rewrite para funcionar — sólo bloquea
+# accesos peligrosos. Las reglas de rewrite quedan como mejora opcional.
+
 Options -Indexes -MultiViews
 
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /api/
-  # Bloquea acceso directo a config y librerías
-  RewriteRule ^(config|config\.example|lib|routes)(\.php)?(/.*)?$ - [F,L]
-  # Front controller: todo a index.php (preservando query string)
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^ index.php [L,QSA]
-</IfModule>
-
-# Defensa adicional si mod_rewrite no está disponible
-<FilesMatch "\.(sql|md|log|ini|env|sample|example|bak|backup|swp|swo|tmp)$">
+# 1) Bloquear archivos sensibles (defensa en profundidad)
+<FilesMatch "\.(sql|sqlite|sqlite3|md|log|ini|env|sample|example|bak|backup|swp|swo|tmp|orig|save|lock)$">
   Require all denied
 </FilesMatch>
 
-<Files "config.php">
-  Require all denied
-</Files>
+<Files "config.php">          Require all denied </Files>
+<Files "config.example.php">  Require all denied </Files>
 
-# Tipo correcto y sin sniffing
+# 2) Bloquear acceso directo a librerías y rutas internas.
+RedirectMatch 403 (?i)/(api/)?(config|lib|routes)(\.php)?(/|$)
+
+# 3) Cabeceras
 <IfModule mod_headers.c>
-  Header set X-Content-Type-Options "nosniff"
-  Header set X-Frame-Options "SAMEORIGIN"
-  Header set Referrer-Policy "strict-origin-when-cross-origin"
-  Header set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+  Header always set Cache-Control "no-store, no-cache, must-revalidate"
+</IfModule>
+
+# 4) Mejora opcional: si mod_rewrite está disponible, también acepta URLs
+#    "limpias" del estilo /api/auth/me además del /api/index.php?path=...
+#    Sin RewriteBase: las reglas son relativas al directorio de este .htaccess.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Bloqueo de subdirectorios internos vía rewrite (cinturón + tirantes).
+  RewriteRule ^(config|lib|routes)(\.php)?(/|$) - [F,L]
+
+  # Si el path no es un archivo o directorio real, lo enrutamos al front
+  # controller (index.php). El front controller lee el path desde
+  # REQUEST_URI cuando ?path= no está presente.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [L,QSA]
 </IfModule>

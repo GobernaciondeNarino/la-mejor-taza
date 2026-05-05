@@ -225,9 +225,9 @@ const ActivityLive = ({ stands, comentarios }) => {
       <div style={{ marginTop: 24, padding: 18, border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--paper)" }}>
         <div className="mono" style={{ marginBottom: 10 }}>Exportar para reportes</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <a href={(window.LMT_API_BASE || "/api") + "/export/votos.csv"} className="btn btn-ghost" download>⤓ Votos (CSV)</a>
-          <a href={(window.LMT_API_BASE || "/api") + "/export/stands.csv"} className="btn btn-ghost" download>⤓ Stands (CSV)</a>
-          <a href={(window.LMT_API_BASE || "/api") + "/export/pasaportes.csv"} className="btn btn-ghost" download>⤓ Pasaportes (CSV)</a>
+          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/votos.csv") : "#"} className="btn btn-ghost" download>⤓ Votos (CSV)</a>
+          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/stands.csv") : "#"} className="btn btn-ghost" download>⤓ Stands (CSV)</a>
+          <a href={window.LMTApi ? window.LMTApi.urlFor("/export/pasaportes.csv") : "#"} className="btn btn-ghost" download>⤓ Pasaportes (CSV)</a>
         </div>
         <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>
           Las descargas requieren sesión activa de administrador.

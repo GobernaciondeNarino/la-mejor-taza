@@ -38,6 +38,14 @@ Options -Indexes -MultiViews
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Si el sistema NO está instalado y no hay api/config.php, redirige a install.php
+  # (sólo para la home y la SPA — nunca para /api ni para install.php).
+  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f
+  RewriteCond %{REQUEST_URI} !^/install\.php
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteCond %{REQUEST_URI} ^/(|s/[a-z0-9\-]{2,32}/?|La%20Mejor%20Taza\.html)$
+  RewriteRule ^ /install.php [L,R=302]
+
   # /s/{id} → la app (que detecta el id en la URL)
   RewriteRule ^s/[a-z0-9\-]{2,32}/?$ "/La Mejor Taza.html" [L]
 

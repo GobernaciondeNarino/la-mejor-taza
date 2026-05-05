@@ -20,8 +20,6 @@ Options -Indexes -MultiViews
 DirectoryIndex index.php app.php index.html
 
 # 2) Bloqueo de archivos sensibles ------------------------------------------
-# - Cualquier archivo "oculto" (.git, .env, .htaccess.bak, etc.)
-# - Logs, dumps, copias de seguridad, archivos de editor.
 <FilesMatch "^\.">
   Require all denied
 </FilesMatch>
@@ -29,7 +27,6 @@ DirectoryIndex index.php app.php index.html
   Require all denied
 </FilesMatch>
 
-# Archivos del backend que no deben servirse jamás como estáticos.
 <Files "config.php">
   Require all denied
 </Files>
@@ -46,9 +43,7 @@ DirectoryIndex index.php app.php index.html
   Require all denied
 </Files>
 
-# Bloqueo recursivo de directorios internos (compatibilidad mod_alias /
-# mod_rewrite — Apache no soporta DirectoryMatch global aquí, así que
-# además filtramos por mod_rewrite más abajo).
+# Bloqueo recursivo de directorios y archivos internos.
 RedirectMatch 403 (?i)/(\.git|\.svn|\.hg|node_modules|vendor)(/|$)
 RedirectMatch 403 (?i)/(api/(config|lib|routes)|db)(/|$)
 RedirectMatch 403 (?i)\.(sqlite|sqlite3|sql|env|ini|log)$
@@ -61,17 +56,17 @@ RedirectMatch 403 (?i)\.(sqlite|sqlite3|sql|env|ini|log)$
   Header always set Permissions-Policy              "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   Header always set Cross-Origin-Opener-Policy      "same-origin"
   Header always set Cross-Origin-Resource-Policy    "same-site"
-  # HSTS sólo si la respuesta viaja por TLS.
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
 
-  # Sin caché para HTML (lo dinámico): el SPA no puede quedarse pegado.
   <FilesMatch "\.(php|html)$">
     Header set Cache-Control "no-store, must-revalidate"
   </FilesMatch>
 </IfModule>
 
 # 4) Front controller -------------------------------------------------------
-# Estrategia A (preferida): mod_rewrite.
+# Estrategia A (preferida): mod_rewrite. No hace falta RewriteBase —
+# Apache resuelve las reglas relativas desde el directorio donde vive
+# este .htaccess, así que funciona tanto en raíz como en subdirectorio.
 <IfModule mod_rewrite.c>
   RewriteEngine On
 

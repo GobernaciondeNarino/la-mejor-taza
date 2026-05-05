@@ -1,80 +1,54 @@
-# /.htaccess — La Mejor Taza
+# /lamejortaza/.htaccess — La Mejor Taza (instalado en subdirectorio)
+
 Options -Indexes -MultiViews
-DirectoryIndex app.php
 
-# 1) Forzar HTTPS (descomenta tras verificar TLS)
-# <IfModule mod_rewrite.c>
-#   RewriteEngine On
-#   RewriteCond %{HTTPS} !=on
-#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-# </IfModule>
-
-# 2) Bloquear archivos sensibles
+# 1) Bloquear archivos sensibles
 <FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3))$">
-  Require all denied
+    Require all denied
 </FilesMatch>
-<FilesMatch "^(api/config\.php|composer\.(json|lock))$">
-  Require all denied
+<FilesMatch "^(config\.php|composer\.(json|lock))$">
+    Require all denied
 </FilesMatch>
-<DirectoryMatch "^.*/(db)/?$">
-  Require all denied
-</DirectoryMatch>
 
-# 3) Cabeceras de seguridad
+# 2) Cabeceras de seguridad
 <IfModule mod_headers.c>
-  Header always set X-Content-Type-Options "nosniff"
-  Header always set X-Frame-Options "SAMEORIGIN"
-  Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-  Header always set Cross-Origin-Opener-Policy "same-origin"
-  Header always set Cross-Origin-Resource-Policy "same-site"
-  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
 </IfModule>
 
-# 4) Rewrites SPA
+# 3) Rewrites para SPA + QR cortos /s/{id}, conscientes del subdirectorio
 <IfModule mod_rewrite.c>
-  RewriteEngine On
+    RewriteEngine On
+    RewriteBase /lamejortaza/
 
-  # Si todavía no está instalado, manda al asistente.
-  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-f
-  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-d
-  RewriteCond %{REQUEST_URI} !install\.php$
-  RewriteCond %{REQUEST_URI} !^/api(/|$)
-  # Si api/config.php no existe, redirige todo al instalador.
-  # Usamos una variable: si el archivo existe en el filesystem, no redirige.
-  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f [OR]
-  RewriteCond %{REQUEST_FILENAME} -f
-  RewriteRule . - [E=HAS_CONFIG:0]
-  RewriteCond %{ENV:HAS_CONFIG} =0
-  RewriteCond %{REQUEST_URI} !install\.php$
-  RewriteCond %{REQUEST_URI} !^/api(/|$)
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f
-  RewriteRule ^.*$ install.php [R=302,L]
+    # Si no hay api/config.php, redirige a install.php (sólo para home y SPA)
+    RewriteCond %{DOCUMENT_ROOT}/lamejortaza/api/config.php !-f
+    RewriteCond %{REQUEST_URI} !^/lamejortaza/install\.php
+    RewriteCond %{REQUEST_URI} !^/lamejortaza/api(/|$)
+    RewriteCond %{REQUEST_URI} ^/lamejortaza/(|index\.html|s/[a-z0-9\-]{2,32}/?|La%20Mejor%20Taza\.html)$
+    RewriteRule ^ /lamejortaza/install.php [L,R=302]
 
-  # Si la URL pide la API, dejar pasar al front controller de la API.
-  RewriteRule ^api(/.*)?$ api/index.php [L]
+    # /s/{id} → la SPA
+    RewriteRule ^s/[a-z0-9\-]{2,32}/?$ "La Mejor Taza.html" [L]
 
-  # Si es un archivo o carpeta real, servirlo tal cual.
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # Cualquier ruta de la SPA (/, /s/{id}, /admin*, /festival/*, /pasaporte) → app.php
-  RewriteRule ^(s/[a-z0-9\-]{2,32}/?|admin(/.*)?|festival/[a-z0-9\-]+/?|pasaporte/?)?$ app.php [L,QSA]
+    # / → la SPA
+    RewriteRule ^$ "La Mejor Taza.html" [L]
 </IfModule>
 
-# 5) Compresión y cache
+# 4) Compresión y cache
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
+
 <IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresByType text/css "access plus 1 hour"
-  ExpiresByType application/javascript "access plus 1 hour"
-  ExpiresByType image/svg+xml "access plus 1 day"
-  ExpiresByType image/png "access plus 7 days"
-  ExpiresByType image/jpeg "access plus 7 days"
-  ExpiresByType image/webp "access plus 7 days"
-  ExpiresByType font/woff2 "access plus 30 days"
+    ExpiresActive On
+    ExpiresByType text/css                "access plus 1 hour"
+    ExpiresByType application/javascript  "access plus 1 hour"
+    ExpiresByType image/svg+xml           "access plus 1 day"
+    ExpiresByType image/png               "access plus 7 days"
+    ExpiresByType image/jpeg              "access plus 7 days"
+    ExpiresByType image/webp              "access plus 7 days"
+    ExpiresByType font/woff2              "access plus 30 days"
 </IfModule>

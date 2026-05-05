@@ -51,7 +51,19 @@ function register_routes_votos(\LMT\Router $r): void
         if (!$emoji)  Response::error(422, 'emoji_invalido');
         if (!$correo) Response::error(422, 'correo_invalido');
 
-        // Rate limits combinados
+        // Verificar que el stand exista
+        $pdo = Db::pdo();
+        $check = $pdo->prepare('SELECT 1 FROM stands WHERE id = :id');
+        $check->execute([':id' => $stand]);
+        if (!$check->fetchColumn()) Response::error(404, 'stand_no_existe');
+
+        // Si ya votó este correo por este stand, devolver mensaje claro
+        // ANTES de aplicar rate limits (para que el usuario sepa por qué no se registra).
+        $dup = $pdo->prepare('SELECT 1 FROM votos WHERE stand_id = :s AND correo = :c LIMIT 1');
+        $dup->execute([':s' => $stand, ':c' => $correo]);
+        if ($dup->fetchColumn()) Response::error(409, 'ya_votaste');
+
+        // Rate limits combinados (anti-spam)
         $ip = RateLimit::ipHash();
         if (!RateLimit::hit('vote', $ip . '|' . $stand)) {
             Response::error(429, 'rate_limited');
@@ -59,11 +71,6 @@ function register_routes_votos(\LMT\Router $r): void
         if (!RateLimit::hit('vote_email', hash('sha256', $correo))) {
             Response::error(429, 'rate_limited');
         }
-
-        // Verificar que el stand exista
-        $check = Db::pdo()->prepare('SELECT 1 FROM stands WHERE id = :id');
-        $check->execute([':id' => $stand]);
-        if (!$check->fetchColumn()) Response::error(404, 'stand_no_existe');
 
         // Insertar voto + actualizar agregados + upsert pasaporte en una transacción.
         try {
@@ -121,6 +128,28 @@ function register_routes_votos(\LMT\Router $r): void
             throw $e;
         }
 
+        Response::ok(null);
+    });
+
+    // Borrar voto (sólo admin) — se usa para moderar comentarios ofensivos.
+    // Ajusta los agregados de stands.
+    $r->delete('/votos/:id', function (array $p) {
+        Security::requireAdmin();
+        $id = (int) ($p['id'] ?? 0);
+        if ($id <= 0) Response::error(400, 'bad_id');
+
+        \LMT\Db::tx(function (\PDO $pdo) use ($id) {
+            $stmt = $pdo->prepare('SELECT stand_id, emoji FROM votos WHERE id = :id');
+            $stmt->execute([':id' => $id]);
+            $row = $stmt->fetch();
+            if (!$row) return;
+            $col = ['bueno' => 'votos_bueno', 'regular' => 'votos_regular', 'malo' => 'votos_malo'][$row['emoji']] ?? null;
+            $pdo->prepare('DELETE FROM votos WHERE id = :id')->execute([':id' => $id]);
+            if ($col) {
+                $pdo->prepare("UPDATE stands SET $col = CASE WHEN $col > 0 THEN $col - 1 ELSE 0 END WHERE id = :s")
+                    ->execute([':s' => $row['stand_id']]);
+            }
+        });
         Response::ok(null);
     });
 }

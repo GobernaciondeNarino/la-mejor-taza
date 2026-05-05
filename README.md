@@ -337,8 +337,13 @@ Todas las respuestas usan `application/json` y la forma:
 | `DELETE`| `/api/stands/:id`             | admin        | CASCADE borra votos.               |
 | `GET`   | `/api/votos?limit=20`         | público      | Últimos N votos (correos enmascarados). |
 | `POST`  | `/api/votos`                  | público*     | Validado server-side; índice único.|
+| `DELETE`| `/api/votos/{id}`             | admin        | Modera comentarios; ajusta agregados. |
 | `GET`   | `/api/pasaportes/{correo}`    | público      | Correo viene URL-encoded.          |
 | `GET`   | `/api/dashboard`              | público      | Stands + votos + métricas.         |
+| `GET`   | `/api/health`                 | público      | Versión PHP, BD alcanzable, contadores. |
+| `GET`   | `/api/export/votos.csv`       | admin        | CSV con BOM UTF-8 (Excel).         |
+| `GET`   | `/api/export/stands.csv`      | admin        | CSV con BOM UTF-8.                 |
+| `GET`   | `/api/export/pasaportes.csv`  | admin        | CSV con BOM UTF-8.                 |
 
 > \* No requiere usuario, pero **sí** CSRF + Origin permitido.
 

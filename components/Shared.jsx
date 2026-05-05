@@ -76,36 +76,50 @@ const Placeholder = ({ width = "100%", height = 80, label = "logo", style }) => 
   }}>{label}</div>
 );
 
-// QR placeholder (patrón aleatorio pero estable por id)
-const QRCode = ({ data = "st-01", size = 140, fg = "var(--ink)", bg = "var(--paper)" }) => {
-  // Hash determinista del string
-  let h = 0;
-  for (let i = 0; i < data.length; i++) h = ((h << 5) - h + data.charCodeAt(i)) | 0;
-  const rand = (i) => { const x = Math.sin(h + i * 13.37) * 10000; return x - Math.floor(x); };
+// URL absoluta del QR para un stand: respeta subdirectorio + host actual.
+const standUrl = (standId) => {
+  const base = (window.LMT_BASE_URL || "").replace(/\/$/, "");
+  return window.location.origin + base + "/s/" + standId;
+};
 
-  const grid = 21; // módulos QR estándar
-  const cell = size / grid;
-  const cells = [];
-  for (let y = 0; y < grid; y++) {
-    for (let x = 0; x < grid; x++) {
-      if (rand(y * grid + x) > 0.5) cells.push({ x, y });
+// QR real generado en cliente con qrcode-generator (Kazuhiko Arase).
+// `data` puede ser el id del stand (genera la URL) o ya una URL completa.
+const QRCode = ({ data = "st-01", size = 140, fg = "#1a1a1a", bg = "#ffffff", margin = 2 }) => {
+  const url = /^https?:/i.test(data) ? data : standUrl(data);
+  const svgRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!window.qrcode || !svgRef.current) return;
+    const qr = window.qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    const count = qr.getModuleCount();
+    const total = count + margin * 2;
+    const cell = size / total;
+    let path = "";
+    for (let y = 0; y < count; y++) {
+      for (let x = 0; x < count; x++) {
+        if (qr.isDark(y, x)) {
+          path += `M${(x + margin) * cell},${(y + margin) * cell}h${cell}v${cell}h-${cell}z`;
+        }
+      }
     }
-  }
-  // Finder patterns (esquinas)
-  const finders = [[0,0],[grid-7,0],[0,grid-7]];
+    svgRef.current.innerHTML = `
+      <rect width="${size}" height="${size}" fill="${bg}"/>
+      <path d="${path}" fill="${fg}" shape-rendering="crispEdges"/>
+    `;
+  }, [url, size, fg, bg, margin]);
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ background: bg, display: "block" }}>
-      {cells.map((c, i) => (
-        <rect key={i} x={c.x * cell} y={c.y * cell} width={cell} height={cell} fill={fg}/>
-      ))}
-      {finders.map(([fx, fy], i) => (
-        <g key={i}>
-          <rect x={fx * cell} y={fy * cell} width={cell * 7} height={cell * 7} fill={bg}/>
-          <rect x={fx * cell} y={fy * cell} width={cell * 7} height={cell * 7} fill="none" stroke={fg} strokeWidth={cell}/>
-          <rect x={(fx + 2) * cell} y={(fy + 2) * cell} width={cell * 3} height={cell * 3} fill={fg}/>
-        </g>
-      ))}
-    </svg>
+    <svg
+      ref={svgRef}
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={`QR para ${url}`}
+      style={{ display: "block" }}
+    />
   );
 };
 
@@ -129,4 +143,4 @@ const calcScore = (votos) => {
 
 const totalVotos = (votos) => votos.bueno + votos.regular + votos.malo;
 
-Object.assign(window, { LogoTaza, Wordmark, MontanasSilueta, SelloCircular, Placeholder, QRCode, BarraVotos, calcScore, totalVotos });
+Object.assign(window, { LogoTaza, Wordmark, MontanasSilueta, SelloCircular, Placeholder, QRCode, BarraVotos, calcScore, totalVotos, standUrl });

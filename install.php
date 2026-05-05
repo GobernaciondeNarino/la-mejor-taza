@@ -173,6 +173,15 @@ function write_config(array $db, string $pepper, string $appSecret, string $rein
             var_export($db['password'], true)
           );
 
+    // Detectar HTTPS para configurar cookies seguras y forzar TLS sólo si tiene sentido.
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || stripos($siteUrl, 'https://') === 0
+    );
+    $secureCookie = $isHttps ? 'true' : 'false';
+    $forceHttps   = $isHttps ? 'true' : 'false';
+
     $allowed = "[\n";
     if ($siteUrl !== '') {
         $allowed .= "        " . var_export(rtrim($siteUrl, '/'), true) . ",\n";
@@ -200,7 +209,7 @@ return [
     'session' => [
         'name'     => 'lmt_sid',
         'lifetime' => 28800,
-        'secure'   => false, // pon true en producción HTTPS
+        'secure'   => {$secureCookie},
         'samesite' => 'Strict',
         'path'     => '/',
         'domain'   => '',
@@ -215,7 +224,7 @@ return [
         'global'     => ['window' => 60,  'max' => 120],
     ],
 
-    'force_https' => false,
+    'force_https' => {$forceHttps},
     'debug'       => false,
 ];
 PHP;

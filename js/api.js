@@ -1,16 +1,17 @@
-// js/api.js
-// Cliente del backend PHP. Reemplaza al wiring previo con Firebase.
-// - Hace polling ligero (5s) sobre /api/dashboard para mantener la UI viva.
-// - Incluye CSRF token en cada POST/PUT/DELETE.
-// - Si el backend no responde, mantiene los datos demo de data/stands.js.
+// js/api.js — cliente del backend PHP.
+// - Detecta automáticamente el base URL (raíz o subdirectorio).
+// - Mantiene CSRF + sesión.
+// - Polling ligero (5s) sobre /api/dashboard para datos en vivo.
 
 (function () {
-  const BASE = (window.LMT_API_BASE || "/api").replace(/\/$/, "");
+  const BASE = (window.LMT_API_BASE || (window.LMT_BASE_URL ? window.LMT_BASE_URL + "/api" : "/api")).replace(/\/$/, "");
   let csrf = "";
   let user = null;
   let pollTimer = null;
+  let bootstrapDone = false;
 
-  const dispatch = () => window.dispatchEvent(new CustomEvent("lmt:data"));
+  const dispatchData = () => window.dispatchEvent(new CustomEvent("lmt:data"));
+  const dispatchAuth = () => window.dispatchEvent(new CustomEvent("lmt:auth", { detail: user }));
 
   async function request(path, opts = {}) {
     const method = (opts.method || "GET").toUpperCase();
@@ -28,48 +29,15 @@
       body: opts.body ? (typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body)) : undefined,
     });
     let data = null;
-    try { data = await res.json(); } catch (_) { /* sin cuerpo JSON */ }
+    try { data = await res.json(); } catch (_) {}
     if (!res.ok || (data && data.ok === false)) {
-      const code = (data && (data.error || data.message)) || `http_${res.status}`;
+      const code = (data && (data.error || data.message)) || ("http_" + res.status);
       const err = new Error(code);
       err.status = res.status;
       err.code = code;
       throw err;
     }
     return data && data.data !== undefined ? data.data : data;
-  }
-
-  async function bootstrap() {
-    try {
-      const me = await request("/auth/me");
-      user = me.user || null;
-      csrf = me.csrf || "";
-    } catch (_) {
-      // API no disponible: queda en modo demo.
-      window.LMTApi.enabled = false;
-    }
-  }
-
-  async function pollDashboard() {
-    try {
-      const data = await request("/dashboard");
-      if (Array.isArray(data.stands) && data.stands.length) {
-        window.STANDS_DATA = data.stands.map(mapStand);
-      }
-      if (Array.isArray(data.votos)) {
-        const standMap = Object.fromEntries((window.STANDS_DATA || []).map((s) => [s.id, s]));
-        window.COMENTARIOS_DEMO = data.votos.map((v) => ({
-          stand: v.stand,
-          emoji: v.emoji,
-          texto: window.LMTSecurity ? window.LMTSecurity.sanitizeText(v.texto || "", 500) : (v.texto || ""),
-          compra: !!v.compra,
-          autor: v.autor || "",
-          hora: v.hora || "",
-          _stand: standMap[v.stand],
-        }));
-      }
-      dispatch();
-    } catch (_) { /* silencioso */ }
   }
 
   function mapStand(s) {
@@ -87,66 +55,106 @@
     };
   }
 
+  async function bootstrap() {
+    try {
+      const me = await request("/auth/me");
+      user = me.user || null;
+      csrf = me.csrf || "";
+      window.LMTApi.enabled = true;
+    } catch (e) {
+      console.warn("[lmt] API no disponible:", e.message);
+      window.LMTApi.enabled = false;
+    } finally {
+      bootstrapDone = true;
+      dispatchAuth();
+    }
+  }
+
+  async function pollDashboard() {
+    if (!window.LMTApi.enabled) return;
+    try {
+      const data = await request("/dashboard");
+      if (Array.isArray(data.stands)) {
+        window.STANDS_DATA = data.stands.map(mapStand);
+      }
+      if (Array.isArray(data.votos)) {
+        const standMap = Object.fromEntries((window.STANDS_DATA || []).map((s) => [s.id, s]));
+        window.COMENTARIOS_DEMO = data.votos.map((v) => ({
+          stand: v.stand,
+          emoji: v.emoji,
+          texto: window.LMTSecurity ? window.LMTSecurity.sanitizeText(v.texto || "", 500) : (v.texto || ""),
+          compra: !!v.compra,
+          autor: v.autor || "",
+          hora: v.hora || "",
+          _stand: standMap[v.stand],
+        }));
+      }
+      window.LMTApi.metricas = data.metricas || null;
+      dispatchData();
+    } catch (_) { /* silencioso */ }
+  }
+
   async function signInAdmin(email, password) {
-    const data = await request("/auth/login", {
-      method: "POST",
-      body: { email, password },
-    });
+    const data = await request("/auth/login", { method: "POST", body: { email, password } });
     user = data.user || null;
     csrf = data.csrf || "";
+    dispatchAuth();
     return user;
   }
 
   async function signOutAdmin() {
-    try { await request("/auth/logout", { method: "POST" }); }
-    finally { user = null; csrf = ""; }
+    try { await request("/auth/logout", { method: "POST" }); } catch (_) {}
+    user = null;
+    // Refrescar CSRF tras logout (la sesión se regenera)
+    try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
+    dispatchAuth();
+  }
+
+  async function ensureCsrf() {
+    if (csrf) return;
+    try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
   }
 
   async function submitVote(raw) {
     if (!window.LMTSecurity) throw new Error("seguridad_no_cargada");
     const payload = window.LMTSecurity.buildVotePayload(raw);
-    if (!window.LMTSecurity.canVote(payload.stand)) {
-      throw new Error("rate_limited");
-    }
-    // Refrescar CSRF si hizo falta (por si la sesión se renovó)
-    if (!csrf) {
-      try { const me = await request("/auth/me"); csrf = me.csrf || ""; } catch (_) {}
-    }
+    if (!window.LMTSecurity.canVote(payload.stand)) throw new Error("rate_limited");
+    await ensureCsrf();
     await request("/votos", { method: "POST", body: payload });
     window.LMTSecurity.markVote(payload.stand);
     pollDashboard();
+    return payload;
   }
 
-  async function listStands() {
-    return mapStandsResponse(await request("/stands"));
+  async function getPasaporte(correo) {
+    return request("/pasaportes/" + encodeURIComponent(correo));
   }
-  async function createStand(body) {
-    return request("/stands", { method: "POST", body });
-  }
-  async function updateStand(id, body) {
-    return request("/stands/" + encodeURIComponent(id), { method: "PUT", body });
-  }
-  async function deleteStand(id) {
-    return request("/stands/" + encodeURIComponent(id), { method: "DELETE" });
-  }
-  function mapStandsResponse(data) { return Array.isArray(data) ? data.map(mapStand) : []; }
+
+  async function listStands()           { return (await request("/stands")).map(mapStand); }
+  async function getStand(id)           { return mapStand(await request("/stands/" + encodeURIComponent(id))); }
+  async function createStand(body)      { await ensureCsrf(); return request("/stands", { method: "POST", body }); }
+  async function updateStand(id, body)  { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "PUT", body }); }
+  async function deleteStand(id)        { await ensureCsrf(); return request("/stands/" + encodeURIComponent(id), { method: "DELETE" }); }
 
   window.LMTApi = {
-    enabled: true,
+    enabled: false,
     base: BASE,
     user: () => user,
     csrf: () => csrf,
+    bootstrapDone: () => bootstrapDone,
     signInAdmin,
     signOutAdmin,
     submitVote,
+    getPasaporte,
     listStands,
+    getStand,
     createStand,
     updateStand,
     deleteStand,
     pollDashboard,
   };
 
-  // Arranque automático: bootstrap, primer poll, luego cada 5s.
+  // Arranque automático
   bootstrap().then(() => {
     pollDashboard();
     pollTimer = setInterval(pollDashboard, 5000);

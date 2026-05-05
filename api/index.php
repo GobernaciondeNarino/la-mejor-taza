@@ -43,12 +43,23 @@ if (!\LMT\RateLimit::hit('global', \LMT\RateLimit::ipHash())) {
 // CSRF/Origin para métodos no seguros
 Security::requireCsrfAndOrigin();
 
-// Calcular path interno (sin /api)
+// Calcular path interno de forma robusta (funciona en root y en subdirectorios
+// como /lamejortaza/api/...). Usamos SCRIPT_NAME que apunta a api/index.php.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/api/index.php'));
+$scriptDir = '/' . trim($scriptDir, '/'); // p.ej. "/api" o "/lamejortaza/api"
 $path = $uri;
-$prefix = '/api';
-if (strpos($path, $prefix) === 0) $path = substr($path, strlen($prefix));
-$path = '/' . trim($path, '/');
+if ($scriptDir !== '/' && strpos($path, $scriptDir) === 0) {
+    $path = substr($path, strlen($scriptDir));
+} elseif (strpos($path, '/api') !== false) {
+    // fallback: cortar a partir del último "/api/"
+    $pos = strrpos($path, '/api/');
+    if ($pos === false) {
+        $pos = (substr($path, -4) === '/api') ? strlen($path) - 4 : false;
+    }
+    if ($pos !== false) $path = substr($path, $pos + 4);
+}
+$path = '/' . trim((string)$path, '/');
 
 $router = new Router();
 require __DIR__ . '/routes/auth.php';

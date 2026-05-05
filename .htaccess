@@ -1,70 +1,50 @@
 # /.htaccess — La Mejor Taza
+# Patrón "front controller": cualquier URL que no apunte a un archivo real
+# se sirve a través de app.php (que decide si redirigir a install.php o
+# renderizar la SPA). Esto funciona igual en la raíz que en un subdirectorio.
+
 Options -Indexes -MultiViews
-DirectoryIndex app.php
+DirectoryIndex index.php app.php index.html
 
-# 1) Forzar HTTPS (descomenta tras verificar TLS)
-# <IfModule mod_rewrite.c>
-#   RewriteEngine On
-#   RewriteCond %{HTTPS} !=on
-#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-# </IfModule>
-
-# 2) Bloquear archivos sensibles
-<FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3))$">
+# Bloquear archivos sensibles
+<FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3|json|lock))$">
   Require all denied
 </FilesMatch>
-<FilesMatch "^(api/config\.php|composer\.(json|lock))$">
+<Files "config.php">
   Require all denied
-</FilesMatch>
-<DirectoryMatch "^.*/(db)/?$">
+</Files>
+<Files "router.php">
   Require all denied
-</DirectoryMatch>
+</Files>
 
-# 3) Cabeceras de seguridad
+# Cabeceras de seguridad
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   Header always set Cross-Origin-Opener-Policy "same-origin"
-  Header always set Cross-Origin-Resource-Policy "same-site"
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
 </IfModule>
 
-# 4) Rewrites SPA
+# Front controller
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Si todavía no está instalado, manda al asistente.
-  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-f
-  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-d
-  RewriteCond %{REQUEST_URI} !install\.php$
-  RewriteCond %{REQUEST_URI} !^/api(/|$)
-  # Si api/config.php no existe, redirige todo al instalador.
-  # Usamos una variable: si el archivo existe en el filesystem, no redirige.
-  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f [OR]
-  RewriteCond %{REQUEST_FILENAME} -f
-  RewriteRule . - [E=HAS_CONFIG:0]
-  RewriteCond %{ENV:HAS_CONFIG} =0
-  RewriteCond %{REQUEST_URI} !install\.php$
-  RewriteCond %{REQUEST_URI} !^/api(/|$)
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f
-  RewriteRule ^.*$ install.php [R=302,L]
+  # /api/... → api/index.php (preservando query string)
+  RewriteRule ^api/?$        api/index.php  [L,QSA]
+  RewriteRule ^api/.*$       api/index.php  [L,QSA]
 
-  # Si la URL pide la API, dejar pasar al front controller de la API.
-  RewriteRule ^api(/.*)?$ api/index.php [L]
-
-  # Si es un archivo o carpeta real, servirlo tal cual.
+  # Si la URL apunta a un archivo o directorio real, servirlo tal cual.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Cualquier ruta de la SPA (/, /s/{id}, /admin*, /festival/*, /pasaporte) → app.php
-  RewriteRule ^(s/[a-z0-9\-]{2,32}/?|admin(/.*)?|festival/[a-z0-9\-]+/?|pasaporte/?)?$ app.php [L,QSA]
+  # Cualquier otra cosa → app.php (que se encarga de la SPA y del wizard)
+  RewriteRule ^ app.php [L]
 </IfModule>
 
-# 5) Compresión y cache
+# Compresión y cache de estáticos
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>

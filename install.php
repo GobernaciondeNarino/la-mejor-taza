@@ -706,9 +706,16 @@ if ($step === 5) {
       $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
       $base = $base === '' ? '' : $base;
     ?>
+    <div class="alert alert-info" style="margin-top:18px;">
+      <strong>Verifica que las URLs limpias funcionan.</strong><br>
+      Antes de cerrar este asistente, abre en otra pestaña:<br>
+      <code><?= h(($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . $base) ?>/api/auth/me</code><br>
+      Debe responder un JSON con <code>"ok": true</code>. Si te devuelve 404, tu Apache necesita
+      <code>mod_rewrite</code> habilitado y <code>AllowOverride All</code> sobre esta carpeta
+      (consulta a tu hosting o revisa el README).
+    </div>
     <div class="actions" style="margin-top:24px;">
-      <a class="btn btn-ghost" href="<?= h($base) ?>/">Ir al sitio</a>
-      <a class="btn btn-primary" href="<?= h($base) ?>/admin/login">Entrar al panel →</a>
+      <a class="btn btn-primary" href="<?= h($base) ?>/">Ir al sitio →</a>
     </div>
     <?php
     // Limpiar el flag para que un reload no muestre datos viejos.

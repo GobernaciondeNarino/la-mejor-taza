@@ -500,8 +500,8 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 - `app.php` calcula el `<base href>` correcto leyendo `SCRIPT_NAME`,
   por lo que `js/`, `styles/` y `/api/` resuelven a
   `/lamejortaza/...` automáticamente.
-- El `.htaccess` de la raíz del repo funciona también desde un
-  subdirectorio (Apache strip-ea el prefijo en reglas relativas).
+- El `.htaccess` está escrito en formato relativo (sin paths absolutos),
+  así que funciona igual en raíz que en cualquier subdirectorio.
 - El asistente de instalación pone en `allowed_origins` la URL exacta
   que ingreses en el paso "URL del sitio". **Esa URL debe coincidir
   con la que ven los navegadores** o los POST devolverán
@@ -509,15 +509,49 @@ Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`)
 - En `api/config.php`, deja `'session' => ['secure' => true]` cuando
   el sitio se sirve por HTTPS (cookies sólo viajan por TLS).
 
-Para verificar en cinco segundos que la API está bien cableada:
+### Verificación rápida tras instalar
 
 ```bash
-curl -i https://tu-sitio/lamejortaza/api/auth/me
-# debe devolver 200 con {"ok":true,"data":{"user":null,"csrf":"…"}}
+# 1. Health check (no requiere CSRF). Debe ser 200 con db_reachable=true.
+curl https://tu-sitio/lamejortaza/api/health
+
+# 2. Auth/me. Debe ser 200 con user:null + csrf.
+curl https://tu-sitio/lamejortaza/api/auth/me
+
+# 3. Refresh profundo del SPA. Debe ser 200 (no 404) y traer LMT_BOOTSTRAP.
+curl -I https://tu-sitio/lamejortaza/admin/login
+curl -I https://tu-sitio/lamejortaza/s/st-08
 ```
 
-Si devuelve 404 → revisa rewrites; si devuelve 500 → revisa logs;
-si devuelve `origin_not_allowed` en POST → ajusta `allowed_origins`.
+### "Después de instalar veo 404 en `/admin/login` / `/s/{id}`"
+
+Casi siempre es uno de estos:
+
+1. **`mod_rewrite` no está activo.** En cPanel suele venir habilitado;
+   en Apache "vanilla" hay que asegurar `LoadModule rewrite_module
+   modules/mod_rewrite.so`. Verifica con `apachectl -M | grep rewrite`.
+2. **`AllowOverride None` en el VirtualHost.** El `.htaccess` se ignora.
+   Tienes que pedir al hosting (o ajustar la config) `AllowOverride All`
+   o al menos `AllowOverride FileInfo Indexes Options`.
+3. **El `.htaccess` no se subió** (algunos clientes FTP ocultan los
+   archivos que empiezan con punto). Verifica que existe físicamente.
+
+Diagnóstico: visita `https://tu-sitio/lamejortaza/api/health`.
+- 200 con JSON → la API funciona; el problema es sólo en las URLs SPA
+  (`mod_rewrite` o `AllowOverride`).
+- 404 / página de error de hosting → ni la API está accesible; revisa
+  `.htaccess` y permisos.
+
+### "POST /api/votos devuelve `origin_not_allowed`"
+
+Edita `api/config.php` y agrega tu URL real (sin barra final) en
+`allowed_origins`:
+
+```php
+'allowed_origins' => [
+    'https://cisna.narino.gov.co/lamejortaza',
+],
+```
 
 ## 13. Roadmap
 

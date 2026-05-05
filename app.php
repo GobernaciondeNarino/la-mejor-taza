@@ -17,6 +17,9 @@ if (!is_file(__DIR__ . '/api/config.php')) {
 }
 
 header('Content-Type: text/html; charset=utf-8');
+// Si llegamos vía ErrorDocument 404 (hosts sin mod_rewrite), forzamos 200
+// porque el SPA decidirá la ruta y mostrará el contenido apropiado.
+http_response_code(200);
 header('Cache-Control: no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');

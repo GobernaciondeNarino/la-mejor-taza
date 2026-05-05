@@ -98,7 +98,12 @@ Gobernación de Nariño.
 
 ## 4. Instalación local
 
-### 4.1. Clonar y levantar el servidor PHP integrado
+### 4.1. Asistente de instalación web (recomendado)
+
+`install.php` es un asistente al estilo WordPress: pide los datos de la
+base de datos y del administrador, prueba la conexión, escribe
+`api/config.php`, crea las tablas, hace un seed opcional y se autobloquea
+al terminar.
 
 ```bash
 git clone https://github.com/GobernaciondeNarino/la-mejor-taza.git
@@ -108,50 +113,58 @@ cd la-mejor-taza
 php -S 127.0.0.1:8000 router.php
 ```
 
-`router.php` (incluido) sirve la SPA y enruta `/api/*` al front
-controller. Abre <http://127.0.0.1:8000/>.
+Abre <http://127.0.0.1:8000/install.php> (o entra a `/`, que redirige
+automáticamente cuando no hay `api/config.php`). Pasos:
 
-### 4.2. SQLite "rápido" para empezar
+1. **Bienvenida** — comprueba versión de PHP, extensiones (`pdo`,
+   `pdo_mysql`/`pdo_sqlite`, `mbstring`, `json`), Argon2id y permisos
+   de `api/` y `db/`.
+2. **Base de datos** — selecciona MySQL/MariaDB o SQLite. Para MySQL
+   piden host, puerto, **nombre de la base**, **usuario** y
+   **contraseña**; si la base no existe, la crea con `utf8mb4`.
+3. **Administrador** — URL del sitio, correo y contraseña (mínimo 12).
+   Aquí también puedes desmarcar el seed de los 8 stands de ejemplo.
+4. **Instalación** — genera `pepper` y `app_secret` aleatorios,
+   escribe `api/config.php` con `'installed' => true` y un
+   `reinstall_token`, ejecuta el esquema y crea el admin.
+5. **Listo** — muestra el `reinstall_token` por si en el futuro
+   necesitas reabrir el asistente sin borrar el config, y sugiere
+   borrar `install.php`.
+
+> Mientras `api/config.php` no exista, `install.php` se ejecuta libremente.
+> En cuanto existe, el asistente se autobloquea — la única forma de
+> reabrirlo es:
+> - borrar `api/config.php`, **o**
+> - llamar `install.php?reinstall={token}` con el token guardado en el
+>   propio config.
+
+Cuando termines, **borra** `install.php` del servidor (no hace falta
+en producción).
+
+### 4.2. Instalación manual (sin wizard)
+
+Si prefieres no usar el asistente:
 
 ```bash
-# Crear esquema y datos demo
+# A) SQLite — rápido para desarrollo
 php -r "\$p=new PDO('sqlite:db/la-mejor-taza.sqlite');
         \$p->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         \$p->exec(file_get_contents('db/schema.sqlite.sql'));
         \$p->exec(file_get_contents('db/seed.sql'));
         echo 'OK\n';"
 
-# Configuración (copiar la plantilla y dejar el DSN sqlite)
-cp api/config.example.php api/config.php
-$EDITOR api/config.php   # cambia el DSN a sqlite:.../db/la-mejor-taza.sqlite
-
-# Crear el primer administrador
-php db/create-admin.php admin@lamejortaza.co 'TuContraseñaMuyLarga'
-```
-
-Recarga la app: la barra inferior dirá **"API conectada"**.
-
-### 4.3. MySQL/MariaDB en lugar de SQLite
-
-```bash
-# 1) Crear esquema
+# B) MySQL/MariaDB
 mysql -u root -p < db/schema.mysql.sql
-
-# 2) Crear usuario de aplicación (opcional, recomendado)
 mysql -u root -p -e "
   CREATE USER 'lmt_app'@'localhost' IDENTIFIED BY 'CAMBIAR_EN_PRODUCCION';
   GRANT SELECT, INSERT, UPDATE, DELETE ON la_mejor_taza.* TO 'lmt_app'@'localhost';
   FLUSH PRIVILEGES;
 "
-
-# 3) Cargar datos demo
 mysql -u lmt_app -p la_mejor_taza < db/seed.sql
 
-# 4) Configuración
+# Config + administrador
 cp api/config.example.php api/config.php
-# edita el DSN: mysql:host=127.0.0.1;dbname=la_mejor_taza;charset=utf8mb4
-
-# 5) Primer administrador
+$EDITOR api/config.php   # ajusta el DSN, pepper y app_secret
 php db/create-admin.php admin@lamejortaza.co 'TuContraseñaMuyLarga'
 ```
 
@@ -424,10 +437,11 @@ la-mejor-taza/
 │   └── three-background.js    # escena Three.js (granos flotantes)
 ├── styles/tokens.css          # design tokens
 ├── data/stands.js             # datos demo (fallback si /api no responde)
+├── install.php                # asistente de instalación (estilo WordPress)
 ├── api/
 │   ├── .htaccess              # bloqueo + front controller
 │   ├── index.php              # bootstrap + router
-│   ├── config.example.php     # plantilla (copiar a config.php)
+│   ├── config.example.php     # plantilla (la genera install.php)
 │   ├── lib/
 │   │   ├── Config.php         # carga de config inmutable
 │   │   ├── Db.php             # PDO singleton + tx()

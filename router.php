@@ -16,6 +16,16 @@ if (strpos($path, '/api') === 0) {
     return true;
 }
 
+// 2.5) Si no hay api/config.php, redirige al asistente de instalación.
+if (!is_file(__DIR__ . '/api/config.php')
+    && $path !== '/install.php'
+    && strpos($path, '/api') !== 0) {
+    if ($path === '/' || preg_match('#^/s/[a-z0-9\-]{2,32}/?$#', $path) || $path === '/La Mejor Taza.html') {
+        header('Location: /install.php', true, 302);
+        exit;
+    }
+}
+
 // 3) Rewrites para la SPA: / y /s/{id}
 if ($path === '/' || preg_match('#^/s/[a-z0-9\-]{2,32}/?$#', $path)) {
     require __DIR__ . '/La Mejor Taza.html';

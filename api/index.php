@@ -62,16 +62,20 @@ if ($scriptDir !== '/' && strpos($path, $scriptDir) === 0) {
 $path = '/' . trim((string)$path, '/');
 
 $router = new Router();
+require __DIR__ . '/routes/health.php';
 require __DIR__ . '/routes/auth.php';
 require __DIR__ . '/routes/stands.php';
 require __DIR__ . '/routes/votos.php';
 require __DIR__ . '/routes/pasaportes.php';
 require __DIR__ . '/routes/dashboard.php';
+require __DIR__ . '/routes/exports.php';
 
+\register_routes_health($router);
 \register_routes_auth($router);
 \register_routes_stands($router);
 \register_routes_votos($router);
 \register_routes_pasaportes($router);
 \register_routes_dashboard($router);
+\register_routes_exports($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', $path);

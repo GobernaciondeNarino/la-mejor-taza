@@ -16,7 +16,25 @@ if (!is_file(__DIR__ . '/api/config.php')) {
     exit;
 }
 
+// Si llega un error grave (config corrupto, fs read-only…) no reventamos.
+set_exception_handler(function (\Throwable $e) use ($baseHref) {
+    error_log('[lmt][app] ' . $e->getMessage());
+    http_response_code(500);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Error</title>';
+    echo '<style>body{font-family:system-ui;padding:48px;color:#222;background:#f6efe2}';
+    echo 'h1{font-style:italic;font-family:Georgia,serif;font-weight:400;font-size:36px;margin:0 0 12px}';
+    echo 'a{color:#a8593a}</style>';
+    echo '<h1>Algo salió mal en el servidor.</h1>';
+    echo '<p>Vuelve a intentarlo en unos segundos. Si persiste, avisa al organizador del festival.</p>';
+    echo '<p><a href="' . htmlspecialchars($baseHref) . '">← Volver al inicio</a></p>';
+    exit;
+});
+
 header('Content-Type: text/html; charset=utf-8');
+// Si llegamos vía ErrorDocument 404 (hosts sin mod_rewrite), forzamos 200
+// porque el SPA decidirá la ruta y mostrará el contenido apropiado.
+http_response_code(200);
 header('Cache-Control: no-store, must-revalidate');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
@@ -92,6 +110,9 @@ window.LMT_API_BASE  = window.LMT_BOOTSTRAP.apiBase;
 <!-- Three.js (animaciones) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js" crossorigin="anonymous"></script>
 <script src="js/three-background.js"></script>
+
+<!-- Generador de QR (Kazuhiko Arase, sin dependencias) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" crossorigin="anonymous"></script>
 
 <!-- Cliente del backend PHP + router del SPA -->
 <script src="js/router.js"></script>

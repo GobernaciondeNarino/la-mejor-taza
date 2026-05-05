@@ -1,3 +1,33 @@
+# /.htaccess — La Mejor Taza
+# Patrón "front controller": cualquier URL que no apunte a un archivo real
+# se sirve a través de app.php (que decide si redirigir a install.php o
+# renderizar la SPA). Esto funciona igual en la raíz que en un subdirectorio.
+
+Options -Indexes -MultiViews
+DirectoryIndex index.php app.php index.html
+
+# Bloquear archivos sensibles
+<FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3|json|lock))$">
+  Require all denied
+</FilesMatch>
+<Files "config.php">
+  Require all denied
+</Files>
+<Files "router.php">
+  Require all denied
+</Files>
+
+# Cabeceras de seguridad
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
+</IfModule>
+
+# Front controller
 # /lamejortaza/.htaccess — La Mejor Taza (instalado en subdirectorio)
 
 Options -Indexes -MultiViews
@@ -23,21 +53,20 @@ Options -Indexes -MultiViews
     RewriteEngine On
     RewriteBase /lamejortaza/
 
-    # Si no hay api/config.php, redirige a install.php (sólo para home y SPA)
-    RewriteCond %{DOCUMENT_ROOT}/lamejortaza/api/config.php !-f
-    RewriteCond %{REQUEST_URI} !^/lamejortaza/install\.php
-    RewriteCond %{REQUEST_URI} !^/lamejortaza/api(/|$)
-    RewriteCond %{REQUEST_URI} ^/lamejortaza/(|index\.html|s/[a-z0-9\-]{2,32}/?|La%20Mejor%20Taza\.html)$
-    RewriteRule ^ /lamejortaza/install.php [L,R=302]
+  # /api/... → api/index.php (preservando query string)
+  RewriteRule ^api/?$        api/index.php  [L,QSA]
+  RewriteRule ^api/.*$       api/index.php  [L,QSA]
 
-    # /s/{id} → la SPA
-    RewriteRule ^s/[a-z0-9\-]{2,32}/?$ "La Mejor Taza.html" [L]
+  # Si la URL apunta a un archivo o directorio real, servirlo tal cual.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
 
-    # / → la SPA
-    RewriteRule ^$ "La Mejor Taza.html" [L]
+  # Cualquier otra cosa → app.php (que se encarga de la SPA y del wizard)
+  RewriteRule ^ app.php [L]
 </IfModule>
 
-# 4) Compresión y cache
+# Compresión y cache de estáticos
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>

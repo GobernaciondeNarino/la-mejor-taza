@@ -38,18 +38,44 @@ final class Security
      *  - Origin/Referer dentro de la lista blanca
      *  - Header X-CSRF-Token igual al token de sesión
      */
+    /**
+     * Normaliza una URL al "origin" (esquema://host[:puerto]) usado por el
+     * navegador en el header Origin.
+     */
+    private static function originOf(string $url): string
+    {
+        $u = parse_url(trim($url));
+        if (!$u || empty($u['scheme']) || empty($u['host'])) return rtrim($url, '/');
+        $o = strtolower($u['scheme']) . '://' . strtolower($u['host']);
+        if (!empty($u['port'])) $o .= ':' . $u['port'];
+        return $o;
+    }
+
     public static function requireCsrfAndOrigin(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) return;
 
         $allowed = (array) Config::get('allowed_origins', []);
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        $allowedOrigins = array_map([self::class, 'originOf'], $allowed);
+
+        $origin  = $_SERVER['HTTP_ORIGIN']  ?? '';
         $referer = $_SERVER['HTTP_REFERER'] ?? '';
-        $source = $origin !== '' ? $origin : $referer;
+
         $ok = false;
-        foreach ($allowed as $a) {
-            if ($source !== '' && stripos($source, rtrim($a, '/')) === 0) { $ok = true; break; }
+        if ($origin !== '') {
+            $oNorm = self::originOf($origin);
+            $ok = in_array($oNorm, $allowedOrigins, true);
+        }
+        // Fallback Referer: chequea por prefijo contra la URL completa permitida.
+        if (!$ok && $referer !== '') {
+            $rNorm = self::originOf($referer);
+            $ok = in_array($rNorm, $allowedOrigins, true);
+            if (!$ok) {
+                foreach ($allowed as $a) {
+                    if (stripos($referer, rtrim($a, '/')) === 0) { $ok = true; break; }
+                }
+            }
         }
         if (!$ok) Response::error(403, 'origin_not_allowed');
 

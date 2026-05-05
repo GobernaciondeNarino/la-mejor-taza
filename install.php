@@ -173,6 +173,15 @@ function write_config(array $db, string $pepper, string $appSecret, string $rein
             var_export($db['password'], true)
           );
 
+    // Detectar HTTPS para configurar cookies seguras y forzar TLS sólo si tiene sentido.
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || stripos($siteUrl, 'https://') === 0
+    );
+    $secureCookie = $isHttps ? 'true' : 'false';
+    $forceHttps   = $isHttps ? 'true' : 'false';
+
     $allowed = "[\n";
     if ($siteUrl !== '') {
         $allowed .= "        " . var_export(rtrim($siteUrl, '/'), true) . ",\n";
@@ -200,7 +209,7 @@ return [
     'session' => [
         'name'     => 'lmt_sid',
         'lifetime' => 28800,
-        'secure'   => false, // pon true en producción HTTPS
+        'secure'   => {$secureCookie},
         'samesite' => 'Strict',
         'path'     => '/',
         'domain'   => '',
@@ -215,7 +224,7 @@ return [
         'global'     => ['window' => 60,  'max' => 120],
     ],
 
-    'force_https' => false,
+    'force_https' => {$forceHttps},
     'debug'       => false,
 ];
 PHP;
@@ -706,9 +715,16 @@ if ($step === 5) {
       $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
       $base = $base === '' ? '' : $base;
     ?>
+    <div class="alert alert-info" style="margin-top:18px;">
+      <strong>Verifica que las URLs limpias funcionan.</strong><br>
+      Antes de cerrar este asistente, abre en otra pestaña:<br>
+      <code><?= h(($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '') . $base) ?>/api/auth/me</code><br>
+      Debe responder un JSON con <code>"ok": true</code>. Si te devuelve 404, tu Apache necesita
+      <code>mod_rewrite</code> habilitado y <code>AllowOverride All</code> sobre esta carpeta
+      (consulta a tu hosting o revisa el README).
+    </div>
     <div class="actions" style="margin-top:24px;">
-      <a class="btn btn-ghost" href="<?= h($base) ?>/">Ir al sitio</a>
-      <a class="btn btn-primary" href="<?= h($base) ?>/admin/login">Entrar al panel →</a>
+      <a class="btn btn-primary" href="<?= h($base) ?>/">Ir al sitio →</a>
     </div>
     <?php
     // Limpiar el flag para que un reload no muestre datos viejos.

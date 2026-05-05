@@ -28,8 +28,30 @@ DirectoryIndex index.php app.php index.html
 </IfModule>
 
 # Front controller
+# /lamejortaza/.htaccess — La Mejor Taza (instalado en subdirectorio)
+
+Options -Indexes -MultiViews
+
+# 1) Bloquear archivos sensibles
+<FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3))$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(config\.php|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>
+
+# 2) Cabeceras de seguridad
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+</IfModule>
+
+# 3) Rewrites para SPA + QR cortos /s/{id}, conscientes del subdirectorio
 <IfModule mod_rewrite.c>
-  RewriteEngine On
+    RewriteEngine On
+    RewriteBase /lamejortaza/
 
   # /api/... → api/index.php (preservando query string)
   RewriteRule ^api/?$        api/index.php  [L,QSA]
@@ -46,15 +68,16 @@ DirectoryIndex index.php app.php index.html
 
 # Compresión y cache de estáticos
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
+
 <IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresByType text/css "access plus 1 hour"
-  ExpiresByType application/javascript "access plus 1 hour"
-  ExpiresByType image/svg+xml "access plus 1 day"
-  ExpiresByType image/png "access plus 7 days"
-  ExpiresByType image/jpeg "access plus 7 days"
-  ExpiresByType image/webp "access plus 7 days"
-  ExpiresByType font/woff2 "access plus 30 days"
+    ExpiresActive On
+    ExpiresByType text/css                "access plus 1 hour"
+    ExpiresByType application/javascript  "access plus 1 hour"
+    ExpiresByType image/svg+xml           "access plus 1 day"
+    ExpiresByType image/png               "access plus 7 days"
+    ExpiresByType image/jpeg              "access plus 7 days"
+    ExpiresByType image/webp              "access plus 7 days"
+    ExpiresByType font/woff2              "access plus 30 days"
 </IfModule>

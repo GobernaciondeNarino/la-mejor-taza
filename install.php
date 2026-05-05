@@ -330,8 +330,11 @@ if (is_installed() && !reinstall_token_ok() && !$justFinished) {
       Si necesitas reinstalar, borra <code>api/config.php</code> y vuelve a ejecutar este asistente.
     </div>
     <p>Por seguridad, también puedes borrar el archivo <code>install.php</code> después de la instalación.</p>
+    <?php
+      $baseHere = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+    ?>
     <div class="actions">
-      <a class="btn btn-primary" href="/">Ir al sitio →</a>
+      <a class="btn btn-primary" href="<?= h($baseHere) ?>/">Ir al sitio →</a>
     </div>
     <?php
     tail();
@@ -699,9 +702,13 @@ if ($step === 5) {
       <div class="copy" style="margin-top:8px;">install.php?reinstall=<?= h($done['reinstall_token']) ?></div>
       Está guardado dentro de <code>api/config.php</code>; cámbialo si te preocupa.
     </div>
+    <?php
+      $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/');
+      $base = $base === '' ? '' : $base;
+    ?>
     <div class="actions" style="margin-top:24px;">
-      <a class="btn btn-ghost" href="/">Ir al sitio</a>
-      <a class="btn btn-primary" href="/?screen=login">Entrar al panel →</a>
+      <a class="btn btn-ghost" href="<?= h($base) ?>/">Ir al sitio</a>
+      <a class="btn btn-primary" href="<?= h($base) ?>/admin/login">Entrar al panel →</a>
     </div>
     <?php
     // Limpiar el flag para que un reload no muestre datos viejos.

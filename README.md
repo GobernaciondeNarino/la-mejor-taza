@@ -29,28 +29,54 @@ Gobernación de Nariño.
 
 ## 1. Funcionalidades
 
-### Administrador (web · escritorio)
-- Login con correo + contraseña (Argon2id + pepper).
-- CRUD de stands (nombre, municipio, región, dirección, correo, color del
-  sello, descripción, coordenadas para el mapa).
-- Generación de carteles A5 con QR único por stand
-  (`https://lamejortaza.co/s/{standId}`), listos para imprimir.
-- Dashboard de actividad en vivo: últimos votos y ranking actual.
+### Rutas reales (no mockup)
+
+| URL                                  | Audiencia | Qué hace                                                  |
+| ------------------------------------ | --------- | --------------------------------------------------------- |
+| `/`                                  | Público   | Dashboard: podio, mapa, ranking, votos en vivo.           |
+| `/festival/{standId}`                | Público   | Detalle del stand + botón "Votar este stand →".           |
+| `/s/{standId}`                       | Móvil     | **Página real de votación** que abre el QR del stand.     |
+| `/pasaporte`                         | Móvil     | Libreta del usuario con sus sellos reales (por correo).   |
+| `/admin/login`                       | Admin     | Login del organizador.                                    |
+| `/admin` · `/admin/stands`           | Admin     | Lista y métricas (gating real).                           |
+| `/admin/stands/new`                  | Admin     | Crear stand (POST `/api/stands`).                         |
+| `/admin/stands/{id}/edit`            | Admin     | Editar / borrar (PUT/DELETE `/api/stands/{id}`).          |
+| `/admin/qr`                          | Admin     | Carteles A5 imprimibles con el QR del stand.              |
+| `/admin/live`                        | Admin     | Actividad y ranking en tiempo real.                       |
+| `/install.php`                       | One-shot  | Asistente de instalación (auto-bloquea al terminar).      |
+| `/api/...`                           | Backend   | Front controller PHP (auth, stands, votos, pasaportes).   |
+
+### Administrador
+- Autenticación real (cookie `HttpOnly + Secure + SameSite=Strict` +
+  CSRF + Argon2id + pepper).
+- **CRUD real** de stands. El editor llama a la API y refresca el
+  dashboard.
+- Generación de carteles A5 con QR único.
+- Botón "Cerrar sesión" real.
+- Las rutas `/admin/*` están **gated**: si no hay sesión válida, la SPA
+  redirige a `/admin/login` y la API rechaza con `401 unauthorized`.
 
 ### Usuario · móvil (al escanear el QR)
-- Formulario en 3 pasos: correo, calificación con emoji
-  (😞 / 😐 / 😍) y comentario opcional + ¿compraste?.
-- Confirmación con animación de sello aterrizando sobre el pasaporte.
-- "Pasaporte" coleccionable que crece sello a sello, persistido por
-  correo en la tabla `pasaportes`.
+- El QR apunta a `https://tu-sitio/s/{standId}`. Al abrir, la app
+  reconoce el stand y muestra el formulario a pantalla completa
+  (sin marco de teléfono — esto **no es una demo**).
+- 3 pasos: correo → emoji → comentario + ¿compraste?.
+- El voto se guarda en la tabla `votos`, los agregados en `stands`
+  se incrementan, y el correo se sella en la tabla `pasaportes`.
+- Tras votar, el correo queda en `localStorage.lmt.email` y la app
+  navega a `/pasaporte`.
+
+### Pasaporte (`/pasaporte`)
+- Si hay correo guardado, carga la libreta directamente.
+- Si no, pide el correo y consulta `/api/pasaportes/{correo}`.
+- Renderiza una página por sello visitado, con índice y portada.
+- Botón "Cerrar" limpia el correo del dispositivo.
 
 ### Público
-- Dashboard `/` con podio top-3, mapa de Nariño con marcadores por stand,
-  tabla completa, feed de votos en vivo y métricas agregadas.
-- Detalle por stand: distribución de calificaciones y comentarios
-  recientes.
 - Hero animado con un campo 3D de granos de café (Three.js, respeta
   `prefers-reduced-motion`).
+- Polling cada 5 s al `/api/dashboard`. Cualquier voto nuevo aparece
+  en el feed en vivo y mueve el ranking.
 
 ---
 
@@ -419,24 +445,23 @@ certbot --nginx -d lamejortaza.co -d www.lamejortaza.co
 
 ```
 la-mejor-taza/
-├── La Mejor Taza.html         # SPA (carga React + módulos)
-├── index.html                 # redirección
+├── app.php                    # SPA renderizada por PHP (inyecta <base> y LMT_BOOTSTRAP)
+├── index.html                 # redirección a app.php
 ├── router.php                 # router para `php -S` en desarrollo
 ├── .htaccess                  # cabeceras globales + rewrites
 ├── components/                # JSX in-browser (React via Babel)
-│   ├── Shared.jsx
-│   ├── PhoneFrame.jsx
-│   ├── Admin.jsx              # login + stands + editor
-│   ├── QRPrint.jsx
-│   ├── VoteFlow.jsx
-│   ├── Passport.jsx
-│   └── Dashboard.jsx
+│   ├── Shared.jsx             # Logo, sello, QR, barras
+│   ├── Admin.jsx              # login + AdminShell + StandsList + StandEditor
+│   ├── QRPrint.jsx            # poster A5 + lista
+│   ├── VoteFlow.jsx           # MobileVotePage real (full-screen)
+│   ├── Passport.jsx           # PassportPage real (libreta del usuario)
+│   └── Dashboard.jsx          # PublicDashboard + MapaNarino + PublicDetail
 ├── js/
+│   ├── router.js              # router cliente (pushState + popstate)
 │   ├── api.js                 # cliente del backend PHP (fetch + CSRF)
 │   ├── security.js            # validación cliente, mascarado, rate-limit
 │   └── three-background.js    # escena Three.js (granos flotantes)
 ├── styles/tokens.css          # design tokens
-├── data/stands.js             # datos demo (fallback si /api no responde)
 ├── install.php                # asistente de instalación (estilo WordPress)
 ├── api/
 │   ├── .htaccess              # bloqueo + front controller
@@ -467,7 +492,34 @@ la-mejor-taza/
 
 ---
 
-## 12. Roadmap
+## 12. Despliegue en subdirectorio
+
+Si la app vive bajo una ruta (p. ej. `https://cisna.narino.gov.co/lamejortaza/`):
+
+- Sube todo el repo dentro de esa carpeta del docroot.
+- `app.php` calcula el `<base href>` correcto leyendo `SCRIPT_NAME`,
+  por lo que `js/`, `styles/` y `/api/` resuelven a
+  `/lamejortaza/...` automáticamente.
+- El `.htaccess` de la raíz del repo funciona también desde un
+  subdirectorio (Apache strip-ea el prefijo en reglas relativas).
+- El asistente de instalación pone en `allowed_origins` la URL exacta
+  que ingreses en el paso "URL del sitio". **Esa URL debe coincidir
+  con la que ven los navegadores** o los POST devolverán
+  `403 origin_not_allowed`.
+- En `api/config.php`, deja `'session' => ['secure' => true]` cuando
+  el sitio se sirve por HTTPS (cookies sólo viajan por TLS).
+
+Para verificar en cinco segundos que la API está bien cableada:
+
+```bash
+curl -i https://tu-sitio/lamejortaza/api/auth/me
+# debe devolver 200 con {"ok":true,"data":{"user":null,"csrf":"…"}}
+```
+
+Si devuelve 404 → revisa rewrites; si devuelve 500 → revisa logs;
+si devuelve `origin_not_allowed` en POST → ajusta `allowed_origins`.
+
+## 13. Roadmap
 
 - [ ] Endpoint `/api/qr/{standId}.png` que genere el PNG con
       `endroid/qr-code` (composer).

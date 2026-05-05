@@ -1,28 +1,26 @@
 # /.htaccess — La Mejor Taza
-# Cabeceras de seguridad y rewrites para SPA + QR cortos.
 Options -Indexes -MultiViews
+DirectoryIndex app.php
 
-# 1) Forzar HTTPS (descomenta en producción tras verificar TLS)
+# 1) Forzar HTTPS (descomenta tras verificar TLS)
 # <IfModule mod_rewrite.c>
 #   RewriteEngine On
 #   RewriteCond %{HTTPS} !=on
 #   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 # </IfModule>
 
-# 2) Bloquear acceso directo a archivos sensibles
+# 2) Bloquear archivos sensibles
 <FilesMatch "(^\.|\.(env|ini|log|sql|md|sample|example|bak|backup|swp|swo|tmp|sqlite|sqlite3))$">
   Require all denied
 </FilesMatch>
 <FilesMatch "^(api/config\.php|composer\.(json|lock))$">
   Require all denied
 </FilesMatch>
-
-# 3) Bloquear listado del directorio db/
 <DirectoryMatch "^.*/(db)/?$">
   Require all denied
 </DirectoryMatch>
 
-# 4) Cabeceras globales
+# 3) Cabeceras de seguridad
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
@@ -30,34 +28,46 @@ Options -Indexes -MultiViews
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   Header always set Cross-Origin-Opener-Policy "same-origin"
   Header always set Cross-Origin-Resource-Policy "same-site"
-  # HSTS — sólo si efectivamente sirves todo por HTTPS
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
 </IfModule>
 
-# 5) Rewrites: home y QR cortos /s/{standId}
+# 4) Rewrites SPA
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Si el sistema NO está instalado y no hay api/config.php, redirige a install.php
-  # (sólo para la home y la SPA — nunca para /api ni para install.php).
-  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f
-  RewriteCond %{REQUEST_URI} !^/install\.php
+  # Si todavía no está instalado, manda al asistente.
+  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-f
+  RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-d
+  RewriteCond %{REQUEST_URI} !install\.php$
   RewriteCond %{REQUEST_URI} !^/api(/|$)
-  RewriteCond %{REQUEST_URI} ^/(|s/[a-z0-9\-]{2,32}/?|La%20Mejor%20Taza\.html)$
-  RewriteRule ^ /install.php [L,R=302]
+  # Si api/config.php no existe, redirige todo al instalador.
+  # Usamos una variable: si el archivo existe en el filesystem, no redirige.
+  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f [OR]
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule . - [E=HAS_CONFIG:0]
+  RewriteCond %{ENV:HAS_CONFIG} =0
+  RewriteCond %{REQUEST_URI} !install\.php$
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/api/config.php !-f
+  RewriteRule ^.*$ install.php [R=302,L]
 
-  # /s/{id} → la app (que detecta el id en la URL)
-  RewriteRule ^s/[a-z0-9\-]{2,32}/?$ "/La Mejor Taza.html" [L]
+  # Si la URL pide la API, dejar pasar al front controller de la API.
+  RewriteRule ^api(/.*)?$ api/index.php [L]
 
-  # / → la app
-  RewriteRule ^$ "/La Mejor Taza.html" [L]
+  # Si es un archivo o carpeta real, servirlo tal cual.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Cualquier ruta de la SPA (/, /s/{id}, /admin*, /festival/*, /pasaporte) → app.php
+  RewriteRule ^(s/[a-z0-9\-]{2,32}/?|admin(/.*)?|festival/[a-z0-9\-]+/?|pasaporte/?)?$ app.php [L,QSA]
 </IfModule>
 
-# 6) Compresión y cache de estáticos
+# 5) Compresión y cache
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
-
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresByType text/css "access plus 1 hour"

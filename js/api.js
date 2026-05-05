@@ -4,7 +4,16 @@
 // - Polling ligero (5s) sobre /api/dashboard para datos en vivo.
 
 (function () {
-  const BASE = (window.LMT_API_BASE || (window.LMT_BASE_URL ? window.LMT_BASE_URL + "/api" : "/api")).replace(/\/$/, "");
+  // BASE apunta SIEMPRE al front controller PHP. Esto funciona con o
+  // sin mod_rewrite en el servidor — la ruta interna se manda por
+  // ?path=auth/me (preservada por mod_rewrite con QSA y leída por el
+  // PHP directamente cuando los rewrites están desactivados).
+  let BASE = (window.LMT_API_BASE
+    || (window.LMT_BASE_URL ? window.LMT_BASE_URL + "/api/index.php" : "/api/index.php")
+  ).replace(/\/$/, "");
+  // Si nos dieron un BASE viejo del estilo "/api" sin index.php, lo arreglamos.
+  if (!/index\.php$/i.test(BASE)) BASE = BASE + "/index.php";
+
   let csrf = "";
   let user = null;
   let pollTimer = null;
@@ -12,6 +21,21 @@
 
   const dispatchData = () => window.dispatchEvent(new CustomEvent("lmt:data"));
   const dispatchAuth = () => window.dispatchEvent(new CustomEvent("lmt:auth", { detail: user }));
+
+  // Convierte una ruta interna ("/auth/me", "/votos?limit=20") en una URL
+  // absoluta a /api/index.php?path=auth/me[&...].
+  function urlFor(path) {
+    let routePath = path, qs = "";
+    const qIdx = path.indexOf("?");
+    if (qIdx !== -1) {
+      routePath = path.slice(0, qIdx);
+      qs = path.slice(qIdx + 1);
+    }
+    routePath = routePath.replace(/^\//, "");
+    let url = BASE + "?path=" + encodeURIComponent(routePath);
+    if (qs) url += "&" + qs;
+    return url;
+  }
 
   async function request(path, opts = {}) {
     const method = (opts.method || "GET").toUpperCase();
@@ -22,7 +46,7 @@
     if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrf) {
       headers["X-CSRF-Token"] = csrf;
     }
-    const res = await fetch(BASE + path, {
+    const res = await fetch(urlFor(path), {
       method,
       credentials: "same-origin",
       headers,
@@ -139,6 +163,7 @@
   window.LMTApi = {
     enabled: false,
     base: BASE,
+    urlFor,                // útil para descargas (CSV) que necesitan URL completa
     user: () => user,
     csrf: () => csrf,
     bootstrapDone: () => bootstrapDone,

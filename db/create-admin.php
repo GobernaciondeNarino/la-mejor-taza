@@ -8,6 +8,7 @@
 // en un fichero o en el historial del shell en producción: prefiere `read -s`.
 
 declare(strict_types=1);
+if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "Sólo CLI.\n"); exit(1);

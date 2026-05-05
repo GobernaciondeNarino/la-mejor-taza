@@ -1,5 +1,6 @@
 <?php
 namespace LMT;
+defined('LMT_GUARD') || exit('forbidden');
 
 use PDO;
 use PDOException;

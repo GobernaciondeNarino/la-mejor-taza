@@ -15,6 +15,7 @@
  */
 
 declare(strict_types=1);
+if (!defined('LMT_GUARD')) define('LMT_GUARD', true);
 
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
@@ -195,6 +196,7 @@ function write_config(array $db, string $pepper, string $appSecret, string $rein
 // api/config.php — generado por install.php. NO COMMITEAR.
 // Para reinstalar: borra este archivo y ejecuta install.php otra vez,
 // o usa ?reinstall={$reinstallToken} en la URL del instalador.
+defined('LMT_GUARD') || exit('forbidden');
 return [
     'installed'        => true,
     'installed_at'     => '%s',

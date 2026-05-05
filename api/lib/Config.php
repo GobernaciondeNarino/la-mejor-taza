@@ -1,5 +1,6 @@
 <?php
 namespace LMT;
+defined('LMT_GUARD') || exit('forbidden');
 
 final class Config
 {

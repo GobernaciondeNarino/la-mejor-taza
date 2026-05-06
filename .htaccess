@@ -44,7 +44,10 @@ DirectoryIndex index.php app.php index.html
 </Files>
 
 # Bloqueo recursivo de directorios y archivos internos.
-RedirectMatch 403 (?i)/(\.git|\.svn|\.hg|node_modules|vendor)(/|$)
+# OJO: NO bloqueamos `vendor` de forma genérica porque colisiona con
+# nuestro `js/vendor/` (Three.js, qrcode-generator). Si en el futuro
+# se introduce Composer, agregar una regla específica para /vendor/.
+RedirectMatch 403 (?i)/(\.git|\.svn|\.hg|node_modules)(/|$)
 RedirectMatch 403 (?i)/(api/(config|lib|routes)|db)(/|$)
 RedirectMatch 403 (?i)\.(sqlite|sqlite3|sql|env|ini|log)$
 

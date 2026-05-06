@@ -81,6 +81,30 @@ function reinstall_token_ok(): bool {
     }
 }
 
+/**
+ * Detecta si la instalación quedó "a medias": config.php existe e `installed`
+ * es true, pero la tabla `admins` quedó vacía. En ese caso permitimos
+ * re-ejecutar el wizard sin pedir el reinstall_token (porque sería absurdo
+ * exigir un token cuando ni siquiera hay un admin que lo conozca).
+ */
+function install_incomplete(): bool {
+    if (!is_file(LMT_CONFIG_PATH)) return false;
+    try {
+        $cfg = @include LMT_CONFIG_PATH;
+        if (!is_array($cfg) || empty($cfg['db']['dsn'])) return false;
+        $pdo = new PDO($cfg['db']['dsn'], $cfg['db']['user'] ?? null, $cfg['db']['password'] ?? null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 3,
+        ]);
+        $count = (int) $pdo->query("SELECT COUNT(*) FROM admins WHERE password_hash IS NOT NULL AND LENGTH(password_hash) >= 20")->fetchColumn();
+        return $count === 0;
+    } catch (\Throwable $e) {
+        // Si no podemos leer admins (tabla no existe, conexión falla),
+        // tratar como "instalación incompleta" para que el usuario pueda recuperar.
+        return true;
+    }
+}
+
 function valid_email(?string $v): ?string {
     if ($v === null) return null;
     $v = trim(strtolower($v));
@@ -155,12 +179,22 @@ function sql_statements(string $sql): array {
 
 function hash_password(string $plain, string $pepper): string {
     $hmac = hash_hmac('sha256', $plain, $pepper, true);
+    $payload = base64_encode($hmac);
+    // Probar Argon2id, pero hacer fallback robusto a bcrypt si por
+    // memoria/threads/PHP-config falla y devuelve false.
     if (defined('PASSWORD_ARGON2ID')) {
-        return password_hash(base64_encode($hmac), PASSWORD_ARGON2ID, [
-            'memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2,
-        ]);
+        try {
+            $h = @password_hash($payload, PASSWORD_ARGON2ID, [
+                'memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2,
+            ]);
+            if (is_string($h) && $h !== '') return $h;
+        } catch (\Throwable $e) { /* cae a bcrypt */ }
     }
-    return password_hash(base64_encode($hmac), PASSWORD_BCRYPT, ['cost' => 12]);
+    $h = password_hash($payload, PASSWORD_BCRYPT, ['cost' => 12]);
+    if (!is_string($h) || $h === '') {
+        throw new \RuntimeException('No se pudo generar el hash de la contraseña.');
+    }
+    return $h;
 }
 
 function write_config(array $db, string $pepper, string $appSecret, string $reinstallToken, string $siteUrl): bool {
@@ -333,7 +367,10 @@ function render_error(string $message): void {
 // Bloqueo si ya está instalado (excepto si venimos de terminar el flujo).
 // ---------------------------------------------------------------------------
 $justFinished = !empty($_SESSION['done']) && (int)($_GET['step'] ?? 0) === 5;
-if (is_installed() && !reinstall_token_ok() && !$justFinished) {
+// Si la instalación es incompleta (sin admin), dejamos pasar al wizard
+// aunque `installed=true`. Es la única forma sensata de recuperarse.
+$incomplete = install_incomplete();
+if (is_installed() && !reinstall_token_ok() && !$justFinished && !$incomplete) {
     head('Ya instalado', 0);
     ?>
     <div class="alert alert-ok">
@@ -444,26 +481,35 @@ if ($method === 'POST') {
 
     if ($step === 4) {
         if (empty($_SESSION['db']) || empty($_SESSION['admin'])) go(2);
+
+        // Si ya hay un config.php previo de un intento fallido, reusamos su
+        // pepper/app_secret/reinstall_token para no romper sesiones existentes.
+        $existing = null;
+        if (is_file(LMT_CONFIG_PATH)) {
+            try { $existing = include LMT_CONFIG_PATH; } catch (\Throwable $e) { $existing = null; }
+        }
+
+        $stepLog = []; // bitácora para mostrar al usuario si algo falla
         try {
             $db = $_SESSION['db'];
             $admin = $_SESSION['admin'];
 
-            // Generar secretos
-            $pepper = bin2hex(random_bytes(32));
-            $appSecret = bin2hex(random_bytes(32));
-            $reinstallToken = bin2hex(random_bytes(16));
+            // Secretos: nuevos, o reutilizados si ya existían.
+            $pepper = (is_array($existing) && !empty($existing['pepper']))
+                ? (string) $existing['pepper'] : bin2hex(random_bytes(32));
+            $appSecret = (is_array($existing) && !empty($existing['app_secret']))
+                ? (string) $existing['app_secret'] : bin2hex(random_bytes(32));
+            $reinstallToken = (is_array($existing) && !empty($existing['reinstall_token']))
+                ? (string) $existing['reinstall_token'] : bin2hex(random_bytes(16));
 
-            // 1. Escribir config.php
-            if (!write_config($db, $pepper, $appSecret, $reinstallToken, $admin['site_url'] ?: '')) {
-                throw new RuntimeException('No se pudo escribir api/config.php (revisa permisos del directorio api/).');
-            }
-
-            // 2. Crear esquema
+            // 1) Conexión a la BD
             $pdo = pdo_for($db);
+            $stepLog[] = '✓ Conexión a la BD';
+
+            // 2) Esquema
             $schema = $db['driver'] === 'mysql' ? LMT_SCHEMA_MYSQL : LMT_SCHEMA_SQLITE;
             $sql = file_get_contents($schema);
             if (!$sql) throw new RuntimeException('No se pudo leer ' . basename($schema));
-            // Para MySQL: omitimos el CREATE DATABASE (ya está) y el USE.
             if ($db['driver'] === 'mysql') {
                 $sql = preg_replace('/^\s*CREATE DATABASE.*?;\s*/ims', '', $sql);
                 $sql = preg_replace('/^\s*USE\s+\S+\s*;\s*/im', '', $sql);
@@ -473,36 +519,78 @@ if ($method === 'POST') {
             foreach (sql_statements($sql) as $stmt) {
                 if (trim($stmt) !== '') $pdo->exec($stmt);
             }
+            $stepLog[] = '✓ Esquema creado';
 
-            // 3. Seed opcional (sólo si no hay stands ya)
+            // 3) Seed opcional (sólo si tabla vacía)
             if (!empty($_SESSION['seed'])) {
                 $count = (int) $pdo->query('SELECT COUNT(*) FROM stands')->fetchColumn();
                 if ($count === 0) {
                     foreach (sql_statements((string) file_get_contents(LMT_SEED)) as $stmt) {
                         if (trim($stmt) !== '') $pdo->exec($stmt);
                     }
+                    $stepLog[] = '✓ Datos de ejemplo cargados';
+                } else {
+                    $stepLog[] = '· Seed omitido (ya hay ' . $count . ' stands)';
                 }
             }
 
-            // 4. Crear administrador (upsert)
-            $hash = hash_password($admin['password'], $pepper);
+            // 4) Hash de contraseña — esto puede fallar por memoria/Argon2id.
+            try {
+                $hash = hash_password($admin['password'], $pepper);
+            } catch (\Throwable $e) {
+                throw new RuntimeException('Hash de contraseña: ' . $e->getMessage());
+            }
+            if (!is_string($hash) || strlen($hash) < 20) {
+                throw new RuntimeException('Hash de contraseña inválido (vacío o muy corto). Revisa memory_limit de PHP.');
+            }
+            $stepLog[] = '✓ Hash de contraseña generado (' . strlen($hash) . ' bytes)';
+
+            // 5) Insertar / actualizar administrador.
             if ($db['driver'] === 'mysql') {
-                $st = $pdo->prepare('INSERT INTO admins (email, password_hash, is_admin) VALUES (:e,:h,1) ON DUPLICATE KEY UPDATE password_hash = :h2, is_admin = 1');
+                $st = $pdo->prepare(
+                    'INSERT INTO admins (email, password_hash, is_admin) VALUES (:e, :h, 1)
+                     ON DUPLICATE KEY UPDATE password_hash = :h2, is_admin = 1'
+                );
                 $st->execute([':e' => $admin['email'], ':h' => $hash, ':h2' => $hash]);
             } else {
-                $st = $pdo->prepare('INSERT INTO admins (email, password_hash, is_admin) VALUES (:e,:h,1) ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, is_admin = 1');
+                $st = $pdo->prepare(
+                    'INSERT INTO admins (email, password_hash, is_admin) VALUES (:e, :h, 1)
+                     ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, is_admin = 1'
+                );
                 $st->execute([':e' => $admin['email'], ':h' => $hash]);
             }
+            $stepLog[] = '✓ Insert/upsert admin ejecutado';
+
+            // 6) VERIFICAR — si esto falla, avisamos al usuario en lugar de
+            //    dejarlo "instalado" sin admin como pasó antes.
+            $verify = $pdo->prepare('SELECT id, email, is_admin, LENGTH(password_hash) AS hl FROM admins WHERE email = :e LIMIT 1');
+            $verify->execute([':e' => $admin['email']]);
+            $row = $verify->fetch();
+            if (!$row) {
+                throw new RuntimeException('El admin no se guardó (SELECT post-INSERT vacío). Revisa permisos del usuario MySQL en la tabla admins.');
+            }
+            if ((int)($row['hl'] ?? 0) < 20) {
+                throw new RuntimeException('El admin existe pero el hash quedó vacío.');
+            }
+            $stepLog[] = '✓ Admin verificado: ' . $admin['email'] . ' (id=' . $row['id'] . ')';
+
+            // 7) SÓLO ahora escribimos config.php con installed=true.
+            if (!write_config($db, $pepper, $appSecret, $reinstallToken, $admin['site_url'] ?: '')) {
+                throw new RuntimeException('Admin OK pero no se pudo escribir api/config.php (revisa permisos del directorio api/).');
+            }
+            $stepLog[] = '✓ api/config.php escrito';
 
             $_SESSION['done'] = [
                 'email' => $admin['email'],
                 'reinstall_token' => $reinstallToken,
+                'log' => $stepLog,
             ];
-            // Limpiar datos sensibles
             unset($_SESSION['db'], $_SESSION['admin'], $_SESSION['seed'], $_SESSION['db_form'], $_SESSION['admin_form']);
             go(5);
         } catch (\Throwable $e) {
-            $_SESSION['flash_errors'] = ['Falló la instalación: ' . $e->getMessage()];
+            $msg = 'Falló en este paso: ' . $e->getMessage();
+            if ($stepLog) $msg .= "\n\nProgreso antes del fallo:\n" . implode("\n", $stepLog);
+            $_SESSION['flash_errors'] = [$msg];
             go(3);
         }
     }
@@ -517,6 +605,12 @@ unset($_SESSION['flash_errors']);
 if ($step === 1) {
     head('Bienvenida', 1);
     ?>
+    <?php if (!empty($incomplete)): ?>
+      <div class="alert alert-error" style="white-space:pre-wrap;">
+        <strong>Instalación incompleta detectada.</strong>
+        Existe <code>api/config.php</code> pero la tabla <code>admins</code> está vacía o no se puede leer. Re-ejecuta el wizard para completar la creación del administrador (los demás datos se preservan si ya existen).
+      </div>
+    <?php endif; ?>
     <h2>Vamos a instalar el sistema.</h2>
     <p>Este asistente te guiará en pocos pasos: comprobaremos el entorno, conectaremos la base de datos, crearemos el administrador y dejaremos el sitio listo para servir tu festival.</p>
 
@@ -569,7 +663,7 @@ if ($step === 2) {
     <p>Necesitamos un usuario de MySQL/MariaDB con permisos para crear (o usar) la base de datos. Si prefieres SQLite — útil para desarrollo o demos pequeñas — selecciónalo abajo.</p>
 
     <?php foreach ($flash as $err): ?>
-      <div class="alert alert-error"><?= h($err) ?></div>
+      <div class="alert alert-error" style="white-space:pre-wrap;"><?= h($err) ?></div>
     <?php endforeach; ?>
 
     <form method="post" action="?step=2">
@@ -637,7 +731,7 @@ if ($step === 3) {
     <p>Esta cuenta podrá registrar stands, generar QR e imprimir carteles. Puedes crear más administradores luego con <code>php db/create-admin.php</code>.</p>
 
     <?php foreach ($flash as $err): ?>
-      <div class="alert alert-error"><?= h($err) ?></div>
+      <div class="alert alert-error" style="white-space:pre-wrap;"><?= h($err) ?></div>
     <?php endforeach; ?>
 
     <form method="post" action="?step=3">

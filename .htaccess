@@ -1,144 +1,47 @@
 # =========================================================================
-# La Mejor Taza — .htaccess
+# La Mejor Taza — .htaccess (raíz)
 # -------------------------------------------------------------------------
-# Front controller estilo WordPress: cualquier URL que no resuelva a un
-# archivo o directorio real se sirve a través de app.php (que decide si
-# redirigir al asistente de instalación o renderizar la SPA).
-#
-# Funciona idéntico en la raíz del dominio o en un subdirectorio
-# (p. ej. https://cisna.narino.gov.co/lamejortaza/), porque todas las
-# reglas son relativas — no se asume ningún prefijo en disco.
-#
-# Requisitos del hosting:
-#   - Apache 2.4+ (Apache 2.2.16+ también vale por FallbackResource).
-#   - mod_rewrite habilitado, o en su defecto FallbackResource permitido.
-#   - AllowOverride All (o al menos: FileInfo Indexes Options Limit).
+# Mínimo absoluto y compatible con Apache 2.2 y 2.4. Toda directiva
+# "delicada" (Options, FilesMatch con Require, expr=) se ha removido o
+# envuelto en <IfModule> para que un host con AllowOverride restrictivo
+# NO devuelva 500. La defensa real está dentro de PHP (LMT_GUARD).
 # =========================================================================
 
-# 1) Defaults ---------------------------------------------------------------
-Options -Indexes -MultiViews
 DirectoryIndex index.php app.php index.html
 
-# 2) Bloqueo de archivos sensibles ------------------------------------------
-<FilesMatch "^\.">
-  Require all denied
-</FilesMatch>
-<FilesMatch "\.(env|ini|log|sql|sqlite|sqlite3|md|sample|example|bak|backup|swp|swo|tmp|lock|orig|save)$">
-  Require all denied
-</FilesMatch>
-
-<Files "config.php">
-  Require all denied
-</Files>
-<Files "router.php">
-  Require all denied
-</Files>
-<Files "composer.json">
-  Require all denied
-</Files>
-<Files "composer.lock">
-  Require all denied
-</Files>
-<Files "package.json">
-  Require all denied
-</Files>
-
-# Bloqueo recursivo de directorios y archivos internos.
-# OJO: NO bloqueamos `vendor` de forma genérica porque colisiona con
-# nuestro `js/vendor/` (Three.js, qrcode-generator). Si en el futuro
-# se introduce Composer, agregar una regla específica para /vendor/.
-RedirectMatch 403 (?i)/(\.git|\.svn|\.hg|node_modules)(/|$)
-RedirectMatch 403 (?i)/(api/(config|lib|routes)|db)(/|$)
-RedirectMatch 403 (?i)\.(sqlite|sqlite3|sql|env|ini|log)$
-
-# 3) Cabeceras de seguridad -------------------------------------------------
-<IfModule mod_headers.c>
-  Header always set X-Content-Type-Options          "nosniff"
-  Header always set X-Frame-Options                 "SAMEORIGIN"
-  Header always set Referrer-Policy                 "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy              "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-  Header always set Cross-Origin-Opener-Policy      "same-origin"
-  Header always set Cross-Origin-Resource-Policy    "same-site"
-  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
-
-  <FilesMatch "\.(php|html)$">
-    Header set Cache-Control "no-store, must-revalidate"
-  </FilesMatch>
-</IfModule>
-
-# 4) Front controller -------------------------------------------------------
-# Estrategia A (preferida): mod_rewrite. No hace falta RewriteBase —
-# Apache resuelve las reglas relativas desde el directorio donde vive
-# este .htaccess, así que funciona tanto en raíz como en subdirectorio.
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # /api/... → api/index.php (preservando query string)
+  # /api/* siempre va al front controller PHP. Preserva el query string.
   RewriteRule ^api/?$    api/index.php  [L,QSA]
   RewriteRule ^api/.*$   api/index.php  [L,QSA]
 
-  # Bloquear el acceso directo a librerías y rutas internas de la API.
-  RewriteRule ^api/(config|lib|routes)(/|$) - [F,L]
-
-  # Si el path apunta a un archivo o directorio real → servirlo tal cual.
+  # Si la URL apunta a un archivo o directorio real, servirlo tal cual.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Cualquier otra ruta → app.php (SPA + redirección al wizard si hace falta).
+  # Cualquier otra ruta (deep link de la SPA) → app.php
   RewriteRule ^ app.php [L]
 </IfModule>
 
-# Estrategia B (fallback): FallbackResource — soportada por Apache 2.2.16+.
-# Si mod_rewrite no está cargado, esto cubre las rutas profundas de la SPA.
+# Fallback cuando mod_rewrite no está disponible.
 <IfModule !mod_rewrite.c>
-  FallbackResource /app.php
+  <IfModule mod_dir.c>
+    FallbackResource /index.php
+  </IfModule>
 </IfModule>
 
-# 5) Compresión -------------------------------------------------------------
+# Cache control sólo si mod_headers existe.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(php|html)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate"
+  </FilesMatch>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Compresión opcional.
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript
-  AddOutputFilterByType DEFLATE application/javascript application/json application/xml
-  AddOutputFilterByType DEFLATE image/svg+xml
-</IfModule>
-
-# 6) Cache de estáticos -----------------------------------------------------
-<IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresDefault                            "access plus 1 hour"
-  ExpiresByType text/html                   "access plus 0 seconds"
-  ExpiresByType text/css                    "access plus 1 hour"
-  ExpiresByType application/javascript      "access plus 1 hour"
-  ExpiresByType image/svg+xml               "access plus 1 day"
-  ExpiresByType image/png                   "access plus 7 days"
-  ExpiresByType image/jpeg                  "access plus 7 days"
-  ExpiresByType image/webp                  "access plus 7 days"
-  ExpiresByType image/x-icon                "access plus 30 days"
-  ExpiresByType font/woff                   "access plus 30 days"
-  ExpiresByType font/woff2                  "access plus 30 days"
-</IfModule>
-
-# 7) MIME types adicionales -------------------------------------------------
-<IfModule mod_mime.c>
-  AddType application/javascript        .js .jsx
-  AddType application/json              .json
-  AddType image/svg+xml                 .svg
-  AddType font/woff2                    .woff2
-</IfModule>
-
-# 8) PHP defaults seguros (si el host permite php_value) --------------------
-<IfModule mod_php.c>
-  php_flag display_errors off
-  php_flag log_errors on
-  php_value max_input_vars 200
-  php_value upload_max_filesize 8M
-  php_value post_max_size 8M
-</IfModule>
-<IfModule mod_php7.c>
-  php_flag display_errors off
-  php_flag log_errors on
-</IfModule>
-<IfModule mod_php8.c>
-  php_flag display_errors off
-  php_flag log_errors on
+  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json image/svg+xml
 </IfModule>
